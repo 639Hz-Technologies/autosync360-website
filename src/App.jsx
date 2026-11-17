@@ -139,7 +139,7 @@ export default function App() {
 
   return (
     <div style={{ fontFamily: "'Montserrat', sans-serif", color: C.dark, background: C.bg, minHeight: "100vh", overflowX: "hidden" }}>
-      <style>{`
+      <style dangerouslySetInnerHTML={{ __html: `
         @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap');
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
         html { scroll-behavior: smooth; }
@@ -214,7 +214,7 @@ export default function App() {
         @media (max-width: 600px) {
           .as-section { padding: 60px 16px; }
         }
-      `}</style>
+      ` }} />
 
       {/* NAV */}
       <nav style={{
