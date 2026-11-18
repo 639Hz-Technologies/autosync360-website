@@ -5,11 +5,17 @@
 [functions]
   node_bundler = "esbuild"
 
-# Private field tool + per-dealer lot pages stay out of search results.
+# Private field tool stays out of search results. (Lot pages, lot media and unsubscribe pages are served
+# by functions, which set their own noindex headers.)
 [[headers]]
   for = "/leads"
   [headers.values]
-    X-Robots-Tag = "noindex, nofollow"
+    X-Robots-Tag = "noindex, nofollow, noarchive"
+    Referrer-Policy = "no-referrer"
+[[headers]]
+  for = "/leads/*"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow, noarchive"
 
 # Unknown industry pages get a real 404 (pre-rendered pages are served first).
 [[redirects]]

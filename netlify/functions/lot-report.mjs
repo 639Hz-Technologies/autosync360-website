@@ -9,7 +9,7 @@ const PHONE = "866-AUTO-239", PHONE_HREF = "tel:8662886239";
 
 const page = (title, body) => new Response(`<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="robots" content="noindex,nofollow"><title>${esc(title)}</title>
+<meta name="robots" content="noindex,nofollow,noarchive,noimageindex"><meta name="referrer" content="no-referrer"><title>${esc(title)}</title>
 <link rel="icon" href="/favicon.ico">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
 <style>
@@ -38,7 +38,7 @@ footer{color:#94a3b8;font-size:13px;padding:0 0 32px}
 <footer class="wrap">© ${new Date().getFullYear()} AutoSync 360</footer>
 </body></html>`, {
   status: 200,
-  headers: { "content-type": "text/html; charset=utf-8", "x-robots-tag": "noindex, nofollow", "cache-control": "public, max-age=300" },
+  headers: { "content-type": "text/html; charset=utf-8", "x-robots-tag": "noindex, nofollow, noarchive, noimageindex", "referrer-policy": "no-referrer", "cache-control": "public, max-age=300" },
 });
 
 export default async (req, context) => {

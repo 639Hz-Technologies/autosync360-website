@@ -8,14 +8,14 @@ export const config = { path: "/unsubscribe/:id" };
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 const page = (body, status = 200) => new Response(`<!doctype html><html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow">
+<meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow,noarchive"><meta name="referrer" content="no-referrer">
 <title>Unsubscribe | AutoSync 360</title><link rel="icon" href="/favicon.ico">
 <style>body{margin:0;background:#f6f8fc;font:16px/1.6 -apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#1e293b}
 .c{max-width:440px;margin:12vh auto 0;padding:32px 24px;background:#fff;border:1px solid rgba(15,23,42,.09);border-radius:14px;text-align:center}
 img{height:24px;mix-blend-mode:multiply;margin-bottom:20px}h1{font-size:22px;margin:0 0 8px;color:#0b1220}p{color:#64748b;margin:0 0 20px}
 button{border:0;background:#0b1220;color:#fff;font:600 15px inherit;padding:12px 22px;border-radius:10px;cursor:pointer}</style></head>
 <body><div class="c"><img src="/autosync360-wordmark.png" alt="AutoSync 360">${body}</div></body></html>`,
-  { status, headers: { "content-type": "text/html; charset=utf-8", "x-robots-tag": "noindex, nofollow", "cache-control": "no-store" } });
+  { status, headers: { "content-type": "text/html; charset=utf-8", "x-robots-tag": "noindex, nofollow, noarchive", "referrer-policy": "no-referrer", "cache-control": "no-store" } });
 
 export default async (req, context) => {
   const id = String(context.params?.id || "").toLowerCase();

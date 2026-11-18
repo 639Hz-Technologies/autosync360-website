@@ -20,12 +20,13 @@ const SESSION_DAYS = 30;
 
 const env = k => process.env[k] || "";
 export const siteUrl = () => (env("SITE_URL") || "https://autosync360.com").replace(/\/$/, "");
-export const mediaUrl = path => `${env("SUPABASE_URL").replace(/\/$/, "")}/storage/v1/object/public/${BUCKET}/${path}`;
+// Photos/videos are served through our own domain (lead-media function) so they carry noindex headers.
+export const mediaUrl = path => `${siteUrl()}/lot-media/${path}`;
 export const reportUrl = id => `${siteUrl()}/lot/${id}`;
 export const unsubscribeUrl = id => `${siteUrl()}/unsubscribe/${id}`;
 
 export const json = (body, status = 200) =>
-  new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", "cache-control": "no-store" } });
+  new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", "cache-control": "no-store", "x-robots-tag": "noindex, nofollow" } });
 
 export function missingEnv(keys) {
   return keys.filter(k => !env(k));
