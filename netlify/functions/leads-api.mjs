@@ -2,7 +2,7 @@
 //   POST /api/leads/login   {password}                 → {token}
 //   POST /api/leads/upload  {type}                     → {path, uploadUrl, url}   (phone PUTs the file to uploadUrl)
 //   POST /api/leads/send    {dealership, address, contactName, contactTitle, email, issues[], notes, media[], force}
-//                                                      → saves the lead and sends email 1 from Gmail (follow-ups: leads-followups)
+//                                                      → saves the lead and sends email 1 via Postmark (follow-ups: leads-followups)
 //   POST /api/leads/preview {same as send}             → {subject, html} of email 1, nothing sent
 //   GET  /api/leads/list                               → recent leads for the Campaign tab
 //   POST /api/leads/status  {id, status}               → replied / stopped (no more follow-ups)
@@ -10,7 +10,7 @@
 //   POST /api/leads/place   {placeId, sessionToken}    → name, address, website, phone for the picked dealer
 import crypto from "node:crypto";
 import { ISSUES } from "../../src/leads/issues.js";
-import { MAIL_ENV, sendLeadEmail, afterSend } from "../lib/lead-mail.mjs";
+import { mailMissing, senderInfo, sendLeadEmail, afterSend } from "../lib/lead-mail.mjs";
 import { renderEmail } from "../lib/lead-emails.mjs";
 import {
   json, missingEnv, checkPassword, issueToken, isAuthed, db, signedUpload, MEDIA_PATH, mediaUrl, reportUrl, unsubscribeUrl,
@@ -78,7 +78,7 @@ export default async (req) => {
         phone: process.env.LEADS_PHONE || "866-AUTO-239",
         businessAddress: process.env.BUSINESS_ADDRESS || "(business address goes here)",
       });
-      return json({ subject, html, from: process.env.GMAIL_USER || "(GMAIL_USER not set)" });
+      return json({ subject, html, ...senderInfo() });
     }
 
     if (route === "list" && req.method === "GET") {
@@ -121,7 +121,7 @@ function parseLead(body) {
 }
 
 async function send(body) {
-  const missing = missingEnv(MAIL_ENV);
+  const missing = mailMissing();
   if (missing.length) return json({ error: `Email isn't set up yet (missing ${missing.join(", ")} in Netlify).` }, 500);
 
   const lead = parseLead(body);

@@ -4,8 +4,10 @@
 //   LEADS_PASSWORD             password for autosync360.com/leads
 //   SUPABASE_URL               https://ikxcgwrhfwdzifqfoqbk.supabase.co ("Auto Sync App" project)
 //   SUPABASE_SERVICE_ROLE_KEY  that project's service_role key (server only, never in the browser)
-//   GMAIL_USER                 the Google Workspace address emails come from, e.g. you@autosync360.com
-//   GMAIL_APP_PASSWORD         a Google app password for that account (sends via SMTP, checks for replies via IMAP)
+//   POST_MARK_API              Postmark server token (same one the contact form uses); LEADS_POSTMARK_TOKEN overrides it
+//   LEADS_FROM_EMAIL           optional, From address (defaults to GMAIL_USER, then FROM_EMAIL); must be on a Postmark-verified domain
+//   LEADS_REPLY_TO             optional, where replies go (defaults to GMAIL_USER)
+//   GMAIL_USER / GMAIL_APP_PASSWORD  optional, lets follow-ups check that inbox for replies (IMAP) and stop automatically
 //   BUSINESS_ADDRESS           mailing address printed in every email footer (required by CAN-SPAM)
 //   LEADS_SENDER_NAME          optional, the name signed on the emails (defaults to "AutoSync 360")
 //   LEADS_PHONE                optional, phone in the signature (defaults to 866-AUTO-239)

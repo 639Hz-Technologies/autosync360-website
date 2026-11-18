@@ -1,22 +1,46 @@
-// Sends the /leads emails from your Google Workspace mailbox (SMTP) and checks that inbox for
-// replies (IMAP) before each follow-up. Both use GMAIL_USER + GMAIL_APP_PASSWORD.
+// Sends the /leads emails through Postmark (the same account as the website's contact form), and,
+// when GMAIL_USER + GMAIL_APP_PASSWORD are set, checks that inbox for replies (IMAP) before each follow-up.
+// Bounces and spam complaints come from Postmark's bounce list.
 // LEADS_DRY_RUN=1 renders and logs instead of sending (local testing).
-import nodemailer from "nodemailer";
+import crypto from "node:crypto";
 import { ImapFlow } from "imapflow";
 import { renderEmail, SCHEDULE_DAYS, STEPS } from "./lead-emails.mjs";
 import { db, mediaUrl, reportUrl, unsubscribeUrl } from "./leads.mjs";
 
-export const MAIL_ENV = ["GMAIL_USER", "GMAIL_APP_PASSWORD", "BUSINESS_ADDRESS"];
 const env = k => process.env[k] || "";
 const dryRun = () => env("LEADS_DRY_RUN") === "1";
+const fromAddress = () => env("LEADS_FROM_EMAIL") || env("GMAIL_USER") || env("FROM_EMAIL");
+const replyTo = () => env("LEADS_REPLY_TO") || env("GMAIL_USER") || fromAddress();
+// A separate Postmark server for /leads keeps outreach apart from the contact form; falls back to the shared one.
+const postmarkToken = () => env("LEADS_POSTMARK_TOKEN") || env("POST_MARK_API");
+const gmailOn = () => !!(env("GMAIL_USER") && env("GMAIL_APP_PASSWORD"));
 
-let transport;
-function mailer() {
-  if (dryRun()) return (transport ||= nodemailer.createTransport({ jsonTransport: true }));
-  return (transport ||= nodemailer.createTransport({
-    host: "smtp.gmail.com", port: 465, secure: true,
-    auth: { user: env("GMAIL_USER"), pass: env("GMAIL_APP_PASSWORD").replace(/\s+/g, "") },
-  }));
+/** Who the emails come from / where replies go (shown in the /leads preview). */
+export const senderInfo = () => ({ from: fromAddress() || "(LEADS_FROM_EMAIL not set)", replyTo: replyTo() });
+
+/** Settings still missing before /leads can send (names as they appear in Netlify). */
+export function mailMissing() {
+  const m = [];
+  if (!postmarkToken()) m.push("POST_MARK_API");
+  if (!fromAddress()) m.push("LEADS_FROM_EMAIL");
+  if (!env("BUSINESS_ADDRESS")) m.push("BUSINESS_ADDRESS");
+  return m;
+}
+
+class PermanentError extends Error {}
+
+async function postmark(path, init = {}) {
+  const res = await fetch(`https://api.postmarkapp.com/${path}`, {
+    ...init,
+    headers: { accept: "application/json", "content-type": "application/json", "x-postmark-server-token": postmarkToken(), ...(init.headers || {}) },
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || (data.ErrorCode && data.ErrorCode !== 0)) {
+    const msg = `Postmark ${res.status}: ${data.Message || "request failed"}`;
+    // 406 = recipient is on Postmark's inactive list (hard bounce / spam complaint): don't retry.
+    throw data.ErrorCode === 406 ? new PermanentError(msg) : new Error(msg);
+  }
+  return data;
 }
 
 const addDays = (d, n) => new Date(new Date(d).getTime() + n * 864e5).toISOString();
@@ -35,17 +59,39 @@ export async function sendLeadEmail(step, lead) {
     firstSubject: lead.subject,
   };
   const { subject, html, text } = renderEmail(step, lead, ctx);
-  const thread = step > 0 && lead.first_message_id ? { inReplyTo: lead.first_message_id, references: [lead.first_message_id] } : {};
 
-  const info = await mailer().sendMail({
-    from: { name: ctx.senderName, address: env("GMAIL_USER") },
-    to: lead.contact_name ? { name: lead.contact_name, address: lead.contact_email } : lead.contact_email,
-    subject, html, text, ...thread,
-    list: { unsubscribe: { url: ctx.unsubscribeUrl, comment: "Unsubscribe" } },
-    headers: { "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" },
-  });
-  if (dryRun()) console.log(`[dry run] email ${step + 1} → ${lead.contact_email}: ${subject}`);
-  return { messageId: info.messageId, subject, html, text };
+  // Our own Message-ID so follow-ups can reply into the same thread.
+  const domain = fromAddress().split("@")[1] || "autosync360.com";
+  const messageId = `<lead-${crypto.randomUUID()}@${domain}>`;
+  const headers = [
+    { Name: "Message-ID", Value: messageId },
+    { Name: "List-Unsubscribe", Value: `<${ctx.unsubscribeUrl}>` },
+    { Name: "List-Unsubscribe-Post", Value: "List-Unsubscribe=One-Click" },
+  ];
+  if (step > 0 && lead.first_message_id) headers.push({ Name: "In-Reply-To", Value: lead.first_message_id }, { Name: "References", Value: lead.first_message_id });
+
+  const quote = s => `"${String(s).replace(/["\\]/g, "")}"`;
+  const message = {
+    From: `${quote(ctx.senderName)} <${fromAddress()}>`,
+    To: lead.contact_name ? `${quote(lead.contact_name)} <${lead.contact_email}>` : lead.contact_email,
+    ReplyTo: replyTo(),
+    Subject: subject,
+    HtmlBody: html,
+    TextBody: text,
+    MessageStream: env("POSTMARK_LEADS_STREAM") || "outbound",
+    Tag: "lead-outreach",
+    Metadata: { lead_id: String(lead.id), email_number: String(step + 1) },
+    TrackOpens: false,
+    TrackLinks: "None",
+    Headers: headers,
+  };
+
+  if (dryRun()) {
+    console.log(`[dry run] email ${step + 1} → ${lead.contact_email}: ${subject}`);
+    return { messageId, subject, html, text, message };
+  }
+  const r = await postmark("email", { method: "POST", body: JSON.stringify(message) });
+  return { messageId, postmarkId: r.MessageID, subject, html, text };
 }
 
 /** After email `step` went out: what to store on the lead. */
@@ -58,30 +104,46 @@ export function afterSend(lead, step, sent) {
     next_send_at: next < STEPS ? addDays(base, SCHEDULE_DAYS[next]) : null,
     status: next < STEPS ? "active" : "done",
     ...(step === 0 ? { subject: sent.subject, first_message_id: sent.messageId } : {}),
-    history: [...(lead.history || []), { at: new Date().toISOString(), email: next, messageId: sent.messageId }],
+    history: [...(lead.history || []), { at: new Date().toISOString(), email: next, messageId: sent.messageId, postmarkId: sent.postmarkId }],
   };
 }
 
-/** Inbox check before a follow-up: "replied" if they wrote back, "bounced" if Gmail got a bounce for them, else null.
- *  Searches All Mail, so archived replies count too. */
-export async function openInbox() {
+/** Before a follow-up: "replied" if they wrote back (Gmail inbox, when connected), "bounced" if Postmark has a
+ *  hard bounce for them, "complained" if they marked it spam, else null. */
+export async function openChecks() {
   if (dryRun()) return { check: async () => null, close: async () => {} };
-  const client = new ImapFlow({
-    host: "imap.gmail.com", port: 993, secure: true, logger: false,
-    auth: { user: env("GMAIL_USER"), pass: env("GMAIL_APP_PASSWORD").replace(/\s+/g, "") },
-  });
-  await client.connect();
-  const boxes = await client.list();
-  const all = boxes.find(b => b.specialUse === "\\All")?.path || "INBOX";
-  const lock = await client.getMailboxLock(all);
+
+  let client = null, lock = null;
+  if (gmailOn()) {
+    try {
+      client = new ImapFlow({
+        host: "imap.gmail.com", port: 993, secure: true, logger: false,
+        auth: { user: env("GMAIL_USER"), pass: env("GMAIL_APP_PASSWORD").replace(/\s+/g, "") },
+      });
+      await client.connect();
+      const boxes = await client.list();
+      lock = await client.getMailboxLock(boxes.find(b => b.specialUse === "\\All")?.path || "INBOX");
+    } catch (err) {
+      console.error("Gmail reply check unavailable:", err.message);
+      client = null;
+    }
+  }
+
   return {
     async check(email, since) {
-      const after = new Date(since);
-      if ((await client.search({ from: email, since: after }, { uid: true })).length) return "replied";
-      if ((await client.search({ from: "mailer-daemon", body: email, since: after }, { uid: true })).length) return "bounced";
+      if (client && (await client.search({ from: email, since: new Date(since) }, { uid: true })).length) return "replied";
+      const day = new Date(since).toISOString().slice(0, 10);
+      const b = await postmark(`bounces?count=20&offset=0&emailFilter=${encodeURIComponent(email)}&fromdate=${day}`);
+      const mine = (b.Bounces || []).filter(x => x.Email?.toLowerCase() === email.toLowerCase());
+      if (mine.some(x => x.Type === "SpamComplaint")) return "complained";
+      if (mine.some(x => x.Inactive || x.Type === "HardBounce" || x.Type === "BadEmailAddress")) return "bounced";
       return null;
     },
-    async close() { lock.release(); await client.logout().catch(() => {}); },
+    async close() {
+      if (!client) return;
+      lock?.release();
+      await client.logout().catch(() => {});
+    },
   };
 }
 
@@ -92,7 +154,7 @@ export async function runFollowups({ limit = 15 } = {}) {
   if (!due.length) return { due: 0, sent: 0, replied: 0, failed: 0 };
 
   const result = { due: due.length, sent: 0, replied: 0, failed: 0 };
-  const inbox = await openInbox();
+  const inbox = await openChecks();
   try {
     for (const lead of due) {
       // Claim it first so an overlapping run can't double-send: push next_send_at out an hour.
@@ -101,7 +163,8 @@ export async function runFollowups({ limit = 15 } = {}) {
       try {
         const seen = await inbox.check(lead.contact_email, lead.created_at);
         if (seen) {
-          await db.update(lead.id, { status: seen === "replied" ? "replied" : "failed", next_send_at: null, history: [...(lead.history || []), { at: now, event: seen === "replied" ? "reply detected" : "bounce detected" }] });
+          const status = { replied: "replied", bounced: "failed", complained: "unsubscribed" }[seen];
+          await db.update(lead.id, { status, next_send_at: null, history: [...(lead.history || []), { at: now, event: `${seen} (detected)` }] });
           result[seen === "replied" ? "replied" : "failed"]++;
           continue;
         }
@@ -113,7 +176,7 @@ export async function runFollowups({ limit = 15 } = {}) {
         result.failed++;
         // The claim already pushed it an hour out, so it retries next run. Give up after 3 tries.
         const history = [...(lead.history || []), { at: now, error: String(err.message || err).slice(0, 300) }];
-        const tries = history.filter(h => h.error).length;
+        const tries = err instanceof PermanentError ? 3 : history.filter(h => h.error).length;
         await db.update(lead.id, tries >= 3 ? { history, status: "failed", next_send_at: null } : { history }).catch(() => {});
       }
     }

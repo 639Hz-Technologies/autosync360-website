@@ -1,6 +1,6 @@
 // The /leads email sequence. Edit the wording here; it goes live on the next deploy.
 //
-// Email 1 goes out from your Gmail the moment you hit Send. The leads-followups function sends the
+// Email 1 goes out (via Postmark) the moment you hit Send. The leads-followups function sends the
 // rest as replies in the same thread, unless the GM has replied (it checks the inbox first),
 // unsubscribed, or you tapped Replied/Stop on /leads.
 import { issuesSentence } from "../../src/leads/issues.js";

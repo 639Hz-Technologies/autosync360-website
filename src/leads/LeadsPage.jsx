@@ -1,6 +1,6 @@
 // autosync360.com/leads: password-protected field tool.
 // Walk a dealer's lot → snap photos/video → enter the GM's email → Send.
-// Send saves the lead and emails the GM from your Gmail; leads-followups sends days 3/7/14 until they reply.
+// Send saves the lead and emails the GM via Postmark; leads-followups sends days 3/7/14 until they reply.
 import { useEffect, useRef, useState } from "react";
 import { ISSUES } from "./issues.js";
 
@@ -458,7 +458,7 @@ function NewLead({ token, onAuthFail }) {
         <div className="ld-sheet-bg" style={{ zIndex: 30 }} onClick={() => setPreview(null)}>
           <div className="ld-sheet tall" onClick={e => e.stopPropagation()}>
             <h2 className="ld-h" style={{ fontSize: 18 }}>{preview.subject}</h2>
-            <div className="ld-subj">From {preview.from} · to {f.email.trim()}</div>
+            <div className="ld-subj">From {preview.from} · to {f.email.trim()} · replies go to {preview.replyTo}</div>
             <iframe className="ld-preview" title="Email preview" sandbox="" srcDoc={preview.html} />
             <button className="ld-btn g" onClick={() => setPreview(null)}>Close preview</button>
           </div>
