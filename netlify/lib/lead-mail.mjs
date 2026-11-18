@@ -74,6 +74,7 @@ export async function sendLeadEmail(step, lead) {
   const message = {
     From: `${quote(ctx.senderName)} <${fromAddress()}>`,
     To: lead.contact_name ? `${quote(lead.contact_name)} <${lead.contact_email}>` : lead.contact_email,
+    ...(lead.cc?.length ? { Cc: lead.cc.map(c => (c.name ? `${quote(c.name)} <${c.email}>` : c.email)).join(", ") } : {}),
     ReplyTo: replyTo(),
     Subject: subject,
     HtmlBody: html,
@@ -175,7 +176,20 @@ export async function runFollowups({ limit = 15, now: nowDate = new Date() } = {
       const claimed = await db.updateWhere(lead.id, `step=eq.${lead.step}&status=eq.active`, { next_send_at: addDays(now, lead.test_mode ? 2 / 1440 : 1 / 24) });
       if (!claimed) continue;
       try {
-        const seen = await inbox.check(lead.contact_email, lead.created_at);
+        // A reply from the GM or anyone CC'd stops the sequence. A bounce/complaint from a CC drops just that CC
+        // (a spam complaint from anyone stops everything); from the GM it stops the lead.
+        let seen = await inbox.check(lead.contact_email, lead.created_at);
+        const cc = [];
+        for (const c of lead.cc || []) {
+          if (seen) break;
+          const r = await inbox.check(c.email, lead.created_at);
+          if (r === "replied" || r === "complained") seen = r;
+          else if (r !== "bounced") cc.push(c);
+        }
+        if (!seen && cc.length !== (lead.cc || []).length) {
+          lead.cc = cc;
+          await db.update(lead.id, { cc });
+        }
         if (seen) {
           const status = { replied: "replied", bounced: "failed", complained: "unsubscribed" }[seen];
           await db.update(lead.id, { status, next_send_at: null, ...(seen === "replied" && lead.pipeline_stage === "new" ? { pipeline_stage: "replied", stage_changed_at: now } : {}), history: [...(lead.history || []), { at: now, event: `${seen} (detected)` }] });

@@ -103,6 +103,11 @@ body{margin:0;background:${C.bg}}
 .ld-chips{display:flex;flex-wrap:wrap;gap:8px}
 .ld-chip{border:1px solid ${C.line};background:#fff;border-radius:999px;padding:9px 13px;font:500 14px Inter,sans-serif;color:${C.text};cursor:pointer}
 .ld-chip.on{background:${C.ink};border-color:${C.ink};color:#fff}
+.ld-cc{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:12px;border:1px solid ${C.line};border-radius:12px;margin-top:10px;position:relative;background:#fff}
+.ld-cc .ld-input{padding:11px 12px}
+.ld-cc .full{grid-column:1 / -1}
+.ld-cc .x{position:absolute;top:-10px;right:-10px;width:26px;height:26px;border-radius:50%;border:1px solid ${C.line};background:#fff;color:${C.mute};font-size:16px;line-height:1;cursor:pointer}
+.ld-addcc{margin-top:10px;border:1.5px dashed rgba(37,99,235,.45);background:rgba(37,99,235,.05);color:${C.accent};border-radius:10px;padding:10px 14px;font:600 14px Inter,sans-serif;cursor:pointer;width:100%}
 .ld-test{display:flex;gap:12px;align-items:flex-start;margin-top:14px;padding:12px;border-radius:10px;border:1px dashed ${C.line};background:${C.bg};cursor:pointer}
 .ld-test.on{border:1.5px solid ${C.warn};background:rgba(217,119,6,.07)}
 .ld-test input{width:20px;height:20px;margin-top:2px;accent-color:${C.warn};flex:none}
@@ -219,7 +224,8 @@ function Login({ onLogin }) {
   );
 }
 
-const emptyForm = { dealership: "", address: "", placeId: "", website: "", phone: "", contactName: "", contactTitle: "General Manager", email: "", issues: [], issuesOther: "", notes: "", testMode: false };
+const emptyForm = { dealership: "", address: "", placeId: "", website: "", phone: "", contactName: "", contactTitle: "General Manager", email: "", issues: [], issuesOther: "", notes: "", testMode: false, cc: [] };
+const CC_TITLES = ["Used Car Manager", "New Car Manager", "Sales Manager", "General Sales Manager", "Service Manager", "Recon Manager", "Dealer Principal", "Owner"];
 
 function loadDraft() {
   try { return JSON.parse(store.get(DRAFT_KEY)) || null; } catch { return null; }
@@ -336,12 +342,14 @@ function NewLead({ token, onAuthFail }) {
   const uploading = media.some(m => m.status === "uploading");
   const ready = media.filter(m => m.status === "done");
   const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(f.email.trim());
-  const canSend = f.dealership.trim() && emailOk && ready.length && !uploading;
+  const ccFilled = (f.cc || []).filter(c => c.email.trim());
+  const ccOk = ccFilled.every(c => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(c.email.trim()));
+  const canSend = f.dealership.trim() && emailOk && ccOk && ready.length && !uploading;
 
   const send = async force => {
     setSending(true); setErr(""); setDup(null);
     try {
-      const r = await api("send", { token, body: { ...f, media: ready.map(m => ({ path: m.path, type: m.kind })), force } });
+      const r = await api("send", { token, body: { ...f, cc: ccFilled, media: ready.map(m => ({ path: m.path, type: m.kind })), force } });
       setSent({ ...r, email: f.email, dealership: f.dealership, test: !!f.testMode });
       store.set(DRAFT_KEY, null);
     } catch (x) {
@@ -450,7 +458,28 @@ function NewLead({ token, onAuthFail }) {
             {f.email.trim() ? `${f.email.trim()}@${domainOf(f.website)}` : `Add @${domainOf(f.website)}`}
           </button>
         )}
-        <label className="ld-label" htmlFor="nt">Notes (internal, not emailed)</label>
+        <label className="ld-label">CC <span style={{ fontWeight: 400, color: C.mute }}>(optional: used car manager, sales manager…)</span></label>
+        {(f.cc || []).map((c, i) => {
+          const setCc = (k, v) => setF(p => ({ ...p, cc: p.cc.map((x, j) => (j === i ? { ...x, [k]: v } : x)) }));
+          const dom = domainOf(f.website);
+          return (
+            <div key={i} className="ld-cc">
+              <button type="button" className="x" aria-label="Remove CC" onClick={() => setF(p => ({ ...p, cc: p.cc.filter((_, j) => j !== i) }))}>×</button>
+              <input className="ld-input" placeholder="Name" value={c.name} onChange={e => setCc("name", e.target.value)} autoComplete="off" />
+              <input className="ld-input" placeholder="Title" list="ld-cc-titles" value={c.title} onChange={e => setCc("title", e.target.value)} autoComplete="off" />
+              <input className="ld-input full" type="email" inputMode="email" autoCapitalize="none" placeholder={dom ? `ucm@${dom}` : "manager@dealership.com"} value={c.email}
+                onChange={e => setCc("email", e.target.value)} autoComplete="off" />
+              {dom && c.email && !c.email.includes("@") && (
+                <button type="button" className="ld-domain full" style={{ justifySelf: "start", marginTop: 0 }} onClick={() => setCc("email", `${c.email.trim()}@${dom}`)}>{c.email.trim()}@{dom}</button>
+              )}
+            </div>
+          );
+        })}
+        <datalist id="ld-cc-titles">{CC_TITLES.map(t => <option key={t} value={t} />)}</datalist>
+        {(f.cc || []).length < 5 && (
+          <button type="button" className="ld-addcc" onClick={() => setF(p => ({ ...p, cc: [...(p.cc || []), { name: "", title: (p.cc || []).length ? "" : "Used Car Manager", email: "" }] }))}>+ Add CC</button>
+        )}
+        <label className="ld-label" htmlFor="nt" style={{ marginTop: 16 }}>Notes (internal, not emailed)</label>
         <textarea id="nt" className="ld-input" rows={3} value={f.notes} onChange={set("notes")} placeholder="Spoke to the porter, GM is in Tues–Sat…" />
         <label className={`ld-test${f.testMode ? " on" : ""}`}>
           <input type="checkbox" checked={!!f.testMode} onChange={e => setF(p => ({ ...p, testMode: e.target.checked }))} />
@@ -468,7 +497,7 @@ function NewLead({ token, onAuthFail }) {
       )}
 
       <div className="ld-send">
-        {!canSend && !uploading && <span className="ld-hint" style={{ margin: 0 }}>{!f.dealership.trim() ? "Add the dealership" : !ready.length ? "Add at least one photo or video" : "Add the GM's email"} to send.</span>}
+        {!canSend && !uploading && <span className="ld-hint" style={{ margin: 0 }}>{!f.dealership.trim() ? "Add the dealership" : !ready.length ? "Add at least one photo or video" : !emailOk ? "Add the GM's email" : "Fix the CC email"} to send.</span>}
         <button className="ld-btn big" disabled={!canSend || sending} onClick={() => setConfirming(true)}>
           {uploading ? "Uploading…" : sending ? "Sending…" : f.testMode ? "Send test run" : "Send & start campaign"}
         </button>
@@ -478,6 +507,7 @@ function NewLead({ token, onAuthFail }) {
         <div className="ld-sheet-bg" onClick={() => setConfirming(false)}>
           <div className="ld-sheet" onClick={e => e.stopPropagation()}>
             <h2 className="ld-h" style={{ fontSize: 20 }}>Send to {f.email.trim()}?</h2>
+            {ccFilled.length > 0 && <p className="ld-subj">CC: {ccFilled.map(c => c.name ? `${c.name} (${c.email.trim()})` : c.email.trim()).join(", ")}</p>}
             <ol>
               <li><b>Now:</b> email about {f.dealership.trim()} with a link to its lot page ({ready.length} file{ready.length === 1 ? "" : "s"})</li>
               {f.testMode
@@ -499,7 +529,7 @@ function NewLead({ token, onAuthFail }) {
         <div className="ld-sheet-bg" style={{ zIndex: 30 }} onClick={() => setPreview(null)}>
           <div className="ld-sheet tall" onClick={e => e.stopPropagation()}>
             <h2 className="ld-h" style={{ fontSize: 18 }}>{preview.subject}</h2>
-            <div className="ld-subj">From {preview.from} · to {f.email.trim()} · replies go to {preview.replyTo}</div>
+            <div className="ld-subj">From {preview.from} · to {f.email.trim()}{ccFilled.length ? ` · cc ${ccFilled.map(c => c.email.trim()).join(", ")}` : ""} · replies go to {preview.replyTo}</div>
             <iframe className="ld-preview" title="Email preview" sandbox="" srcDoc={preview.html} />
             <button className="ld-btn g" onClick={() => setPreview(null)}>Close preview</button>
           </div>
@@ -545,7 +575,7 @@ function Campaign({ token, onAuthFail }) {
             <div key={l.id} className="ld-lead">
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontWeight: 700, color: C.ink }}>{l.dealership}</div>
-                <div className="ld-hint" style={{ marginTop: 2, overflow: "hidden", textOverflow: "ellipsis" }}>{l.contact_name ? `${l.contact_name} · ` : ""}{l.contact_email}</div>
+                <div className="ld-hint" style={{ marginTop: 2, overflow: "hidden", textOverflow: "ellipsis" }}>{l.contact_name ? `${l.contact_name} · ` : ""}{l.contact_email}{l.cc?.length ? ` · +${l.cc.length} CC` : ""}</div>
                 <div className="ld-hint" style={{ marginTop: 6, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
                   <span className="ld-pill" style={{ background: bg, color: fg }}>{label}</span>
                   {l.test_mode && <span className="ld-pill" style={{ background: "rgba(217,119,6,.12)", color: C.warn }}>Test</span>}

@@ -118,7 +118,7 @@ export default async (req) => {
     }
 
     if (route === "list" && req.method === "GET") {
-      const rows = await db.select("select=id,created_at,dealership,address,contact_name,contact_title,contact_email,phone,website,status,media,step,next_send_at,last_sent_at,test_mode,pipeline_stage,stage_changed_at,demo_at,notes,notes_log,issues,issues_other&order=created_at.desc&limit=300");
+      const rows = await db.select("select=id,created_at,dealership,address,contact_name,contact_title,contact_email,phone,website,status,media,step,next_send_at,last_sent_at,test_mode,cc,pipeline_stage,stage_changed_at,demo_at,notes,notes_log,issues,issues_other&order=created_at.desc&limit=300");
       return json({ leads: rows.map(r => ({ ...r, report_url: reportUrl(r.id), media_count: (r.media || []).length, media: undefined })) });
     }
 
@@ -166,6 +166,14 @@ export default async (req) => {
   }
 };
 
+// CC'd managers: up to 5, valid and unique, never the main contact.
+function parseCc(list, primary) {
+  const seen = new Set([clean(primary, 200).toLowerCase()]);
+  return (Array.isArray(list) ? list : []).map(c => ({
+    name: clean(c?.name, 120), title: clean(c?.title, 80), email: clean(c?.email, 200).toLowerCase(),
+  })).filter(c => EMAIL.test(c.email) && !seen.has(c.email) && seen.add(c.email)).slice(0, 5);
+}
+
 function parseLead(body) {
   return {
     dealership: clean(body.dealership, 120),
@@ -179,6 +187,7 @@ function parseLead(body) {
     issues: (Array.isArray(body.issues) ? body.issues : []).filter(k => ISSUES[k]),
     issues_other: clean(body.issuesOther, 300) || null,
     test_mode: body.testMode === true,
+    cc: parseCc(body.cc, body.email),
     notes: clean(body.notes, 2000),
     media: (Array.isArray(body.media) ? body.media : [])
       .filter(m => MEDIA_PATH.test(m?.path || ""))
@@ -196,6 +205,16 @@ async function send(body) {
   if (!EMAIL.test(lead.contact_email)) return json({ error: "That email address doesn't look right." }, 400);
   const domainProblem = await emailDomainProblem(lead.contact_email);
   if (domainProblem) return json({ error: domainProblem }, 400);
+  for (const c of lead.cc) {
+    const p = await emailDomainProblem(c.email);
+    if (p) return json({ error: `CC ${c.email}: ${p}` }, 400);
+  }
+  // Anyone who unsubscribed (as the main contact before) is dropped from CC.
+  if (lead.cc.length) {
+    const unsub = await db.select(`select=contact_email&status=eq.unsubscribed&contact_email=in.(${lead.cc.map(c => encodeURIComponent(`"${c.email}"`)).join(",")})`);
+    const blocked = new Set(unsub.map(u => u.contact_email));
+    lead.cc = lead.cc.filter(c => !blocked.has(c.email));
+  }
   if (!lead.media.length) return json({ error: "Add at least one photo or video." }, 400);
 
   // Never email someone who unsubscribed; don't put the same person in twice (unless you confirm).

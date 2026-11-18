@@ -1,7 +1,7 @@
 // "Pipe" tab on /leads: a simple CRM board. Every lead from a lot visit starts in "New lead";
 // drag cards across (or change the stage inside a card on a phone), set the demo date, and keep notes.
 // Moving a lead out of "New lead" stops its automatic emails (you're talking to them now).
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { C, AuthError, api } from "./shared.js";
 
 export const STAGES = [
@@ -198,6 +198,7 @@ function LeadDrawer({ lead, token, onClose, onMove, onSaved, onFail }) {
           <div className="pp-kv">
             {lead.contact_name && <><span>Name</span><span>{lead.contact_name}{lead.contact_title ? `, ${lead.contact_title}` : ""}</span></>}
             <span>Email</span><a href={`mailto:${lead.contact_email}`}>{lead.contact_email}</a>
+            {(lead.cc || []).map(c => <Fragment key={c.email}><span>CC</span><a href={`mailto:${c.email}`}>{c.name ? `${c.name}${c.title ? `, ${c.title}` : ""} · ` : ""}{c.email}</a></Fragment>)}
             {lead.phone && <><span>Phone</span><a href={`tel:${lead.phone.replace(/[^\d+]/g, "")}`}>{lead.phone}</a></>}
             {lead.website && <><span>Website</span><a href={lead.website} target="_blank" rel="noopener">{lead.website.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "")}</a></>}
             {lead.address && <><span>Address</span><a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${lead.dealership} ${lead.address}`)}`} target="_blank" rel="noopener">{lead.address}</a></>}
