@@ -69,6 +69,9 @@ export function renderEmail(step, lead, ctx) {
   const e = EMAILS[step](v);
   const subject = step === 0 ? e.subject : `Re: ${ctx.firstSubject || `Photos from your lot at ${lead.dealership}`}`;
 
+  // Signature: "Name / AutoSync 360 · phone", or just "AutoSync 360 / phone" when the sender is the company.
+  const isCompany = /^autosync\s*360$/i.test(ctx.senderName.trim());
+  const companyLine = isCompany ? "" : "AutoSync 360 · ";
   const P = t => `<p style="margin:0 0 14px">${esc(t)}</p>`;
   const img = (u, w) => `<a href="${esc(ctx.reportUrl)}"><img src="${esc(u)}" width="${w}" alt="Photo from your lot" style="display:block;width:100%;max-width:${w}px;height:auto;border-radius:8px;border:0"></a>`;
   const media = n => {
@@ -89,14 +92,14 @@ export function renderEmail(step, lead, ctx) {
 <div style="max-width:560px;margin:0 auto;padding:20px 16px;font:15px/1.6 -apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#1e293b">
 ${e.body.map(b => (typeof b === "string" ? P(b) : media(b.media))).join("\n")}
 <p style="margin:6px 0 0"><a href="${esc(ctx.reportUrl)}" style="display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;font-weight:600;padding:11px 18px;border-radius:8px">${esc(e.cta)}</a></p>
-<p style="margin:22px 0 0">${esc(ctx.senderName)}<br>AutoSync 360 · <a href="tel:${esc(ctx.phone.replace(/[^\d+]/g, ""))}" style="color:#1e293b">${esc(ctx.phone)}</a><br><a href="https://autosync360.com" style="color:#2563eb">autosync360.com</a></p>
+<p style="margin:22px 0 0">${esc(ctx.senderName)}<br>${companyLine}<a href="tel:${esc(ctx.phone.replace(/[^\d+]/g, ""))}" style="color:#1e293b">${esc(ctx.phone)}</a><br><a href="https://autosync360.com" style="color:#2563eb">autosync360.com</a></p>
 <p style="margin:32px 0 0;font-size:12px;line-height:1.5;color:#94a3b8">AutoSync 360 · ${esc(ctx.businessAddress)}<br>Not interested? <a href="${esc(ctx.unsubscribeUrl)}" style="color:#94a3b8">Unsubscribe</a> and we won't email again.</p>
 </div></body></html>`;
 
   const text = [
     ...e.body.map(b => (typeof b === "string" ? b : b.media > 1 ? `Photos${ctx.hasVideo ? " and video" : ""}: ${ctx.reportUrl}` : "")).filter(Boolean),
     `${e.cta}: ${ctx.reportUrl}`,
-    [ctx.senderName, `AutoSync 360 · ${ctx.phone}`, "https://autosync360.com"].join("\n"),
+    [ctx.senderName, `${companyLine}${ctx.phone}`, "https://autosync360.com"].join("\n"),
     [`AutoSync 360 · ${ctx.businessAddress}`, `Unsubscribe: ${ctx.unsubscribeUrl}`].join("\n"),
   ].join("\n\n");
 
