@@ -71,8 +71,8 @@ export default async (req, context) => {
     ${videos.map(v => `<video controls playsinline preload="metadata" src="${esc(mediaUrl(v.path))}"></video>`).join("")}
     <div class="grid">${photos.map(p => `<a href="${esc(mediaUrl(p.path))}" target="_blank" rel="noopener"><img loading="lazy" src="${esc(mediaUrl(p.path))}" alt="Vehicle on the ${esc(lead.dealership)} lot"></a>`).join("")}</div>
     <section class="cta">
-      <h2>Keep your front line photo-ready.</h2>
-      <p>AutoSync 360 details dealership inventory on a set schedule, right on your lot. Reply to our email or give us a call and we'll walk the lot with you.</p>
+      <h2>Your dirtiest vehicle, detailed for $1.</h2>
+      <p>AutoSync 360 is a CSI-driven detailing company with over a decade at dealerships and recon centers. We know what it takes to get vehicles front-line ready. The $1 demo also gets us set up in your system as a paid vendor, so switching later is easy. Reply to our email or call to pick a day.</p>
       <a class="btn" href="${PHONE_HREF}">Call ${PHONE}</a><a class="btn g" href="/#demo">Learn about AutoSync 360</a>
     </section>`);
 };

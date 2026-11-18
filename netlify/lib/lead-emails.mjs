@@ -9,34 +9,42 @@ import { esc } from "./leads.mjs";
 // Days after email 1 that each email goes out (follow-ups go on weekdays, during business hours).
 export const SCHEDULE_DAYS = [0, 3, 7, 14];
 
+// The opening line of email 1. Change it here to tone it down (e.g. "your lot looks rough.").
+const OPENER = "I'll be straight with you: your lot looks like shit.";
+
+// The offer, used in email 1 and repeated in the follow-ups.
+const OFFER = "Here's my offer: give us your dirtiest vehicle and we'll detail it for $1. That $1 gets us set up in your system as a paid vendor, so when you're ready to make the switch, we're already one step closer.";
+
 // v = { first, dealership, street, issues, hasVideo, photoCount, reportUrl }
 const EMAILS = [
   v => ({
-    subject: `Photos from your lot at ${v.dealership}`,
+    subject: `Your lot at ${v.dealership}`,
     body: [
       `Hi ${v.first},`,
-      `I stopped by ${v.dealership}${v.street ? ` on ${v.street}` : ""} today and took ${v.hasVideo && v.photoCount ? "photos and a quick video" : v.hasVideo ? "a quick video" : "some photos"} of your inventory. ${issuesSentence(v.issues)}`,
+      OPENER,
+      `I walked ${v.dealership}${v.street ? ` on ${v.street}` : ""} today and took ${v.hasVideo && v.photoCount ? "photos and a quick video" : v.hasVideo ? "a quick video" : "some photos"} of your inventory. ${issuesSentence(v.issues)}`,
       { media: 4 },
-      "Shoppers see these cars online before they ever see them in person, and dirty wheels and dusty paint show up in every listing photo and every walk-around.",
-      "We're AutoSync 360. Our team keeps dealership inventory front-line ready on a set schedule, right on your lot, so your porters aren't stuck doing it between deliveries.",
-      "Are you the right person to talk to about this? If so, just reply and I'll swing back by to walk the lot with you. If not, who should I reach out to?",
+      "These are the cars your customers walk up to, and the same cars in your online listings. Shoppers make up their minds from those photos before they ever call.",
+      "We're AutoSync 360, a CSI-driven detailing company that understands what it takes to get vehicles front-line ready. We've been in the industry for over a decade, detailing vehicles at dealerships and recon centers. Our crew speaks English, communicates clearly with your sales and service teams, and uses common sense.",
+      OFFER,
+      "What day this week works for me to swing by?",
     ],
     cta: v.hasVideo ? "See the photos and video" : `See all ${v.photoCount} photos`,
   }),
   v => ({
     body: [
       `Hi ${v.first},`,
-      `Bumping this in case it got buried. Here are the photos from ${v.dealership} again.`,
+      `Following up on the photos from ${v.dealership}. Your front line is what customers see first, in person and online.`,
       { media: 1 },
-      "Worth a 10-minute walk around the lot this week?",
+      "The offer stands: your dirtiest vehicle, detailed for $1. It gets AutoSync 360 set up as a paid vendor in your system, so switching later is easy. Which day works?",
     ],
     cta: "View your lot photos",
   }),
   v => ({
     body: [
       `Hi ${v.first},`,
-      "Most stores we talk to don't have a detailing problem, they have a consistency problem. Cars get cleaned for the photo shoot, then sit on the line for three weeks collecting dust.",
-      `We put your front line on a recurring schedule so it stays clean between sales. Happy to put together a quote for ${v.dealership} based on your lot size. Want one?`,
+      "Most stores don't have a detailing problem, they have a consistency problem. Cars get cleaned for the photo shoot, then sit on the line for weeks collecting dust, and CSI pays for it when a customer takes delivery of a car that isn't right.",
+      `We've spent over a decade making dealership and recon center inventory front-line ready, on a schedule, without your team having to chase us. Happy to put together a quote for ${v.dealership} based on your lot size, or start with the $1 demo. Which would you rather?`,
     ],
     cta: "Your lot photos",
   }),
@@ -44,7 +52,7 @@ const EMAILS = [
     body: [
       `Hi ${v.first},`,
       "I haven't heard back, so I'll assume the timing isn't right and stop reaching out.",
-      `If keeping ${v.dealership}'s lot photo-ready moves up the list, just reply to this email. The photos will still be here.`,
+      `If getting ${v.dealership}'s front line ready moves up the list, just reply here. The $1 demo is still on the table, and the photos will still be here.`,
     ],
     cta: "Your lot photos",
   }),
