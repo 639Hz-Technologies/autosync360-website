@@ -4,7 +4,7 @@
 // LEADS_DRY_RUN=1 renders and logs instead of sending (local testing).
 import crypto from "node:crypto";
 import { ImapFlow } from "imapflow";
-import { renderEmail, SCHEDULE_DAYS, STEPS } from "./lead-emails.mjs";
+import { renderEmail, SCHEDULE_DAYS, TEST_SCHEDULE_MINUTES, STEPS } from "./lead-emails.mjs";
 import { db, mediaUrl, reportUrl, unsubscribeUrl } from "./leads.mjs";
 
 const env = k => process.env[k] || "";
@@ -94,14 +94,17 @@ export async function sendLeadEmail(step, lead) {
   return { messageId, postmarkId: r.MessageID, subject, html, text };
 }
 
-/** After email `step` went out: what to store on the lead. */
+/** After email `step` went out: what to store on the lead. Test runs use minutes instead of days. */
 export function afterSend(lead, step, sent) {
   const next = step + 1;
   const base = step === 0 ? new Date().toISOString() : lead.created_at;
+  const due = next >= STEPS ? null
+    : lead.test_mode ? addDays(base, TEST_SCHEDULE_MINUTES[next] / 1440)
+    : addDays(base, SCHEDULE_DAYS[next]);
   return {
     step: next,
     last_sent_at: new Date().toISOString(),
-    next_send_at: next < STEPS ? addDays(base, SCHEDULE_DAYS[next]) : null,
+    next_send_at: due,
     status: next < STEPS ? "active" : "done",
     ...(step === 0 ? { subject: sent.subject, first_message_id: sent.messageId } : {}),
     history: [...(lead.history || []), { at: new Date().toISOString(), email: next, messageId: sent.messageId, postmarkId: sent.postmarkId }],
@@ -131,7 +134,9 @@ export async function openChecks() {
 
   return {
     async check(email, since) {
-      if (client && (await client.search({ from: email, since: new Date(since) }, { uid: true })).length) return "replied";
+      // Our own outgoing mail lands in the same inbox: never count it as their reply (e.g. testing to yourself).
+      const ours = [fromAddress(), replyTo(), env("GMAIL_USER")].map(a => a.toLowerCase());
+      if (client && !ours.includes(email.toLowerCase()) && (await client.search({ from: email, since: new Date(since) }, { uid: true })).length) return "replied";
       const day = new Date(since).toISOString().slice(0, 10);
       const b = await postmark(`bounces?count=20&offset=0&emailFilter=${encodeURIComponent(email)}&fromdate=${day}`);
       const mine = (b.Bounces || []).filter(x => x.Email?.toLowerCase() === email.toLowerCase());
@@ -147,18 +152,27 @@ export async function openChecks() {
   };
 }
 
-/** Sends every follow-up that's due. Used by the scheduled leads-followups function. */
-export async function runFollowups({ limit = 15 } = {}) {
-  const now = new Date().toISOString();
-  const due = await db.select(`select=*&status=eq.active&next_send_at=lte.${encodeURIComponent(now)}&order=next_send_at.asc&limit=${limit}`);
+/** Real follow-ups only go out Mon–Fri, 9am–6pm Eastern. Test runs go anytime. */
+export function inBusinessHours(d = new Date()) {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", weekday: "short", hour: "numeric", hour12: false })
+    .formatToParts(d).map(p => [p.type, p.value]));
+  const hour = Number(parts.hour) % 24;
+  return !["Sat", "Sun"].includes(parts.weekday) && hour >= 9 && hour < 18;
+}
+
+/** Sends every follow-up that's due. Used by the scheduled leads-followups function (runs every minute). */
+export async function runFollowups({ limit = 15, now: nowDate = new Date() } = {}) {
+  const now = nowDate.toISOString();
+  const onlyTests = inBusinessHours(nowDate) ? "" : "&test_mode=is.true";
+  const due = await db.select(`select=*&status=eq.active&next_send_at=lte.${encodeURIComponent(now)}${onlyTests}&order=next_send_at.asc&limit=${limit}`);
   if (!due.length) return { due: 0, sent: 0, replied: 0, failed: 0 };
 
   const result = { due: due.length, sent: 0, replied: 0, failed: 0 };
   const inbox = await openChecks();
   try {
     for (const lead of due) {
-      // Claim it first so an overlapping run can't double-send: push next_send_at out an hour.
-      const claimed = await db.updateWhere(lead.id, `step=eq.${lead.step}&status=eq.active`, { next_send_at: addDays(now, 1 / 24) });
+      // Claim it first so an overlapping run can't double-send: push next_send_at out (an hour; 2 min for tests).
+      const claimed = await db.updateWhere(lead.id, `step=eq.${lead.step}&status=eq.active`, { next_send_at: addDays(now, lead.test_mode ? 2 / 1440 : 1 / 24) });
       if (!claimed) continue;
       try {
         const seen = await inbox.check(lead.contact_email, lead.created_at);

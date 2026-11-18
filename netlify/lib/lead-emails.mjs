@@ -8,6 +8,8 @@ import { esc } from "./leads.mjs";
 
 // Days after email 1 that each email goes out (follow-ups go on weekdays, during business hours).
 export const SCHEDULE_DAYS = [0, 3, 7, 14];
+// "Test run" leads (switch on the /leads form): same 4 emails, 1 minute apart, any time of day.
+export const TEST_SCHEDULE_MINUTES = [0, 1, 2, 3];
 
 // The opening line of email 1 (owner's choice to keep it blunt).
 const OPENER = "I'll be straight with you: your lot looks like shit.";

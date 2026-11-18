@@ -100,7 +100,7 @@ export default async (req) => {
     }
 
     if (route === "list" && req.method === "GET") {
-      const rows = await db.select("select=id,created_at,dealership,address,contact_name,contact_email,status,media,step,next_send_at,last_sent_at&order=created_at.desc&limit=100");
+      const rows = await db.select("select=id,created_at,dealership,address,contact_name,contact_email,status,media,step,next_send_at,last_sent_at,test_mode&order=created_at.desc&limit=100");
       return json({ leads: rows.map(r => ({ ...r, report_url: reportUrl(r.id), media_count: (r.media || []).length, media: undefined })) });
     }
 
@@ -131,6 +131,7 @@ function parseLead(body) {
     phone: clean(body.phone, 40) || null,
     issues: (Array.isArray(body.issues) ? body.issues : []).filter(k => ISSUES[k]),
     issues_other: clean(body.issuesOther, 300) || null,
+    test_mode: body.testMode === true,
     notes: clean(body.notes, 2000),
     media: (Array.isArray(body.media) ? body.media : [])
       .filter(m => MEDIA_PATH.test(m?.path || ""))
@@ -154,7 +155,7 @@ async function send(body) {
   const prior = await db.select(`select=id,dealership,status&contact_email=eq.${encodeURIComponent(lead.contact_email)}&status=in.(active,unsubscribed)&limit=5`);
   if (prior.some(p => p.status === "unsubscribed")) return json({ error: `${lead.contact_email} unsubscribed earlier, so we can't email them again.` }, 409);
   const dup = prior.find(p => p.status === "active");
-  if (dup && !body.force) return json({ duplicate: dup, error: `${lead.contact_email} is already in the campaign (${dup.dealership}).` }, 409);
+  if (dup && !body.force && !lead.test_mode) return json({ duplicate: dup, error: `${lead.contact_email} is already in the campaign (${dup.dealership}).` }, 409);
 
   const row = await db.insert({ ...lead, status: "active", step: 0 });
   let sent;

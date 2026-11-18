@@ -96,6 +96,11 @@ body{margin:0;background:${C.bg}}
 .ld-chips{display:flex;flex-wrap:wrap;gap:8px}
 .ld-chip{border:1px solid ${C.line};background:#fff;border-radius:999px;padding:9px 13px;font:500 14px Inter,sans-serif;color:${C.text};cursor:pointer}
 .ld-chip.on{background:${C.ink};border-color:${C.ink};color:#fff}
+.ld-test{display:flex;gap:12px;align-items:flex-start;margin-top:14px;padding:12px;border-radius:10px;border:1px dashed ${C.line};background:${C.bg};cursor:pointer}
+.ld-test.on{border:1.5px solid ${C.warn};background:rgba(217,119,6,.07)}
+.ld-test input{width:20px;height:20px;margin-top:2px;accent-color:${C.warn};flex:none}
+.ld-test b{display:block;color:${C.ink};font-size:14px}
+.ld-test span{font-size:13px;color:${C.mute}}
 .ld-btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:15px 18px;border-radius:12px;border:0;font:700 16px Inter,sans-serif;cursor:pointer;background:${C.accent};color:#fff;box-shadow:0 8px 24px rgba(37,99,235,.3)}
 .ld-btn:disabled{opacity:.5;cursor:default;box-shadow:none}
 .ld-btn.g{background:#fff;color:${C.text};border:1px solid ${C.line};box-shadow:none}
@@ -198,7 +203,7 @@ function Login({ onLogin }) {
   );
 }
 
-const emptyForm = { dealership: "", address: "", placeId: "", website: "", phone: "", contactName: "", contactTitle: "General Manager", email: "", issues: [], issuesOther: "", notes: "" };
+const emptyForm = { dealership: "", address: "", placeId: "", website: "", phone: "", contactName: "", contactTitle: "General Manager", email: "", issues: [], issuesOther: "", notes: "", testMode: false };
 
 function loadDraft() {
   try { return JSON.parse(store.get(DRAFT_KEY)) || null; } catch { return null; }
@@ -321,7 +326,7 @@ function NewLead({ token, onAuthFail }) {
     setSending(true); setErr(""); setDup(null);
     try {
       const r = await api("send", { token, body: { ...f, media: ready.map(m => ({ path: m.path, type: m.kind })), force } });
-      setSent({ ...r, email: f.email, dealership: f.dealership });
+      setSent({ ...r, email: f.email, dealership: f.dealership, test: !!f.testMode });
       store.set(DRAFT_KEY, null);
     } catch (x) {
       if (x instanceof AuthError) return onAuthFail();
@@ -337,7 +342,7 @@ function NewLead({ token, onAuthFail }) {
     <div className="ld-card ld-ok">
       <div className="big">✓</div>
       <h2 className="ld-h">Sent to {sent.email}</h2>
-      <p className="ld-hint" style={{ fontSize: 15 }}>{sent.dealership} is in the campaign. Follow-ups go out on days 3, 7 and 14, and stop automatically as soon as they reply.</p>
+      <p className="ld-hint" style={{ fontSize: 15 }}>{sent.test ? "Test run started. Emails 2, 3 and 4 arrive about 1 minute apart." : `${sent.dealership} is in the campaign. Follow-ups go out on days 3, 7 and 14, and stop automatically as soon as they reply.`}</p>
       <p style={{ margin: "16px 0 22px" }}><a className="ld-link" href={sent.report_url} target="_blank" rel="noopener">View their lot page →</a></p>
       <button className="ld-btn" onClick={reset}>Next dealership</button>
     </div>
@@ -432,6 +437,10 @@ function NewLead({ token, onAuthFail }) {
         )}
         <label className="ld-label" htmlFor="nt">Notes (internal, not emailed)</label>
         <textarea id="nt" className="ld-input" rows={3} value={f.notes} onChange={set("notes")} placeholder="Spoke to the porter, GM is in Tues–Sat…" />
+        <label className={`ld-test${f.testMode ? " on" : ""}`}>
+          <input type="checkbox" checked={!!f.testMode} onChange={e => setF(p => ({ ...p, testMode: e.target.checked }))} />
+          <div><b>Test run</b><span>Sends all 4 emails 1 minute apart so you can see the whole sequence. Use your own email.</span></div>
+        </label>
       </div>
 
       {err && <div className="ld-err">{err}</div>}
@@ -444,7 +453,7 @@ function NewLead({ token, onAuthFail }) {
 
       <div className="ld-bottom"><div className="ld-bottom-in">
         <button className="ld-btn" disabled={!canSend || sending} onClick={() => setConfirming(true)}>
-          {uploading ? "Uploading…" : sending ? "Sending…" : "Send & start campaign"}
+          {uploading ? "Uploading…" : sending ? "Sending…" : f.testMode ? "Send test run" : "Send & start campaign"}
         </button>
       </div></div>
 
@@ -454,7 +463,9 @@ function NewLead({ token, onAuthFail }) {
             <h2 className="ld-h" style={{ fontSize: 20 }}>Send to {f.email.trim()}?</h2>
             <ol>
               <li><b>Now:</b> email about {f.dealership.trim()} with a link to its lot page ({ready.length} file{ready.length === 1 ? "" : "s"})</li>
-              <li><b>Day 3, 7, 14:</b> follow-ups in the same thread. They stop as soon as they reply.</li>
+              {f.testMode
+                ? <li><b>Test run: +1, +2, +3 min:</b> emails 2, 3 and 4 in the same thread.</li>
+                : <li><b>Day 3, 7, 14:</b> follow-ups in the same thread. They stop as soon as they reply.</li>}
             </ol>
             <button className="ld-btn g" style={{ marginBottom: 10 }} disabled={preview === "loading"} onClick={async () => {
               setPreview("loading");
@@ -504,7 +515,10 @@ function Campaign({ token, onAuthFail }) {
 
   return (
     <>
-      <h1 className="ld-h">Campaign</h1>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <h1 className="ld-h">Campaign</h1>
+        <button className="ld-btn sm g" onClick={() => { setLeads(null); load(); }}>Refresh</button>
+      </div>
       {err && <div className="ld-err">{err}</div>}
       <div className="ld-card">
         {!leads ? <p className="ld-hint">Loading…</p> : !leads.length ? <p className="ld-hint">No leads yet. Your first lot visit will show up here.</p> : leads.map(l => {
@@ -517,8 +531,9 @@ function Campaign({ token, onAuthFail }) {
                 <div className="ld-hint" style={{ marginTop: 2, overflow: "hidden", textOverflow: "ellipsis" }}>{l.contact_name ? `${l.contact_name} · ` : ""}{l.contact_email}</div>
                 <div className="ld-hint" style={{ marginTop: 6, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
                   <span className="ld-pill" style={{ background: bg, color: fg }}>{label}</span>
+                  {l.test_mode && <span className="ld-pill" style={{ background: "rgba(217,119,6,.12)", color: C.warn }}>Test</span>}
                   <span>{days === 0 ? "today" : `${days}d ago`} · {l.media_count} file{l.media_count === 1 ? "" : "s"}</span>
-                  {l.step > 0 && <span>· {l.step} of 4 emails sent{l.status === "active" && l.next_send_at ? ` · next ${shortDate(l.next_send_at)}` : ""}</span>}
+                  {l.step > 0 && <span>· {l.step} of 4 emails sent{l.status === "active" && l.next_send_at ? ` · next ${l.test_mode ? new Date(l.next_send_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : shortDate(l.next_send_at)}` : ""}</span>}
                   <a className="ld-link" href={l.report_url} target="_blank" rel="noopener">Lot page</a>
                 </div>
               </div>
