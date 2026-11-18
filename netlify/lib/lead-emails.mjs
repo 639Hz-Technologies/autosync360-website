@@ -15,14 +15,14 @@ const OPENER = "I'll be straight with you: your lot looks like shit.";
 // The offer, used in email 1 and repeated in the follow-ups.
 const OFFER = "Here's my offer: give us your dirtiest vehicle and we'll detail it for $1. That $1 gets us set up in your system as a paid vendor, so when you're ready to make the switch, we're already one step closer.";
 
-// v = { first, dealership, street, issues, hasVideo, photoCount, reportUrl }
+// v = { first, dealership, street, issues, issuesOther, hasVideo, photoCount, reportUrl }
 const EMAILS = [
   v => ({
     subject: `Your lot at ${v.dealership}`,
     body: [
       `Hi ${v.first},`,
       OPENER,
-      `I walked ${v.dealership}${v.street ? ` on ${v.street}` : ""} today and took ${v.hasVideo && v.photoCount ? "photos and a quick video" : v.hasVideo ? "a quick video" : "some photos"} of your inventory. ${issuesSentence(v.issues)}`,
+      `I walked ${v.dealership}${v.street ? ` on ${v.street}` : ""} today and took ${v.hasVideo && v.photoCount ? "photos and a quick video" : v.hasVideo ? "a quick video" : "some photos"} of your inventory. ${issuesSentence(v.issues, v.issuesOther)}`,
       { media: 2 }, // 2 photos keeps a cold email light; the rest are on the lot page
       "These are the cars your customers walk up to, and the same cars in your online listings. Shoppers make up their minds from those photos before they ever call.",
       "We're AutoSync 360, a CSI-driven detailing company that understands what it takes to get vehicles front-line ready. We've been in the industry for over a decade, detailing vehicles at dealerships and recon centers. Our crew speaks English, communicates clearly with your sales and service teams, and uses common sense.",
@@ -73,6 +73,7 @@ export function renderEmail(step, lead, ctx) {
     dealership: lead.dealership,
     street: (lead.address || "").split(",")[0].trim(),
     issues: lead.issues,
+    issuesOther: lead.issues_other,
     hasVideo: ctx.hasVideo,
     photoCount: ctx.photos.length,
   };

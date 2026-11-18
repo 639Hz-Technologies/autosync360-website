@@ -130,6 +130,7 @@ function parseLead(body) {
     website: clean(body.website, 300) || null,
     phone: clean(body.phone, 40) || null,
     issues: (Array.isArray(body.issues) ? body.issues : []).filter(k => ISSUES[k]),
+    issues_other: clean(body.issuesOther, 300) || null,
     notes: clean(body.notes, 2000),
     media: (Array.isArray(body.media) ? body.media : [])
       .filter(m => MEDIA_PATH.test(m?.path || ""))

@@ -71,7 +71,8 @@ body{margin:0;background:${C.bg}}
 .ld-top-in{max-width:640px;margin:0 auto;padding:10px 16px;display:flex;align-items:center;gap:12px}
 .ld-top img{height:22px;width:auto;mix-blend-mode:multiply;display:block}
 .ld-tabs{margin-left:auto;display:flex;background:${C.bg};border:1px solid ${C.line};border-radius:10px;padding:3px}
-.ld-tabs button{border:0;background:transparent;font:600 13px Inter,sans-serif;color:${C.mute};padding:7px 12px;border-radius:8px;cursor:pointer}
+.ld-tabs button{border:0;background:transparent;font:600 13px Inter,sans-serif;color:${C.mute};padding:7px 11px;border-radius:8px;cursor:pointer;white-space:nowrap}
+@media(max-width:400px){.ld-top img{height:17px!important}.ld-tabs button{padding:7px 9px}}
 .ld-tabs button.on{background:${C.ink};color:#fff}
 .ld-main{max-width:640px;margin:0 auto;padding:16px}
 .ld-h{font:700 24px/1.2 'Space Grotesk',sans-serif;color:${C.ink};letter-spacing:-.02em}
@@ -197,7 +198,7 @@ function Login({ onLogin }) {
   );
 }
 
-const emptyForm = { dealership: "", address: "", placeId: "", website: "", phone: "", contactName: "", contactTitle: "General Manager", email: "", issues: [], notes: "" };
+const emptyForm = { dealership: "", address: "", placeId: "", website: "", phone: "", contactName: "", contactTitle: "General Manager", email: "", issues: [], issuesOther: "", notes: "" };
 
 function loadDraft() {
   try { return JSON.parse(store.get(DRAFT_KEY)) || null; } catch { return null; }
@@ -287,6 +288,7 @@ function NewLead({ token, onAuthFail }) {
   }, [f, media]);
 
   const set = k => e => setF(p => ({ ...p, [k]: e.target.value }));
+  const [otherOpen, setOtherOpen] = useState(!!(draft?.form?.issuesOther));
   const toggleIssue = k => setF(p => ({ ...p, issues: p.issues.includes(k) ? p.issues.filter(x => x !== k) : [...p.issues, k] }));
   const patch = (key, p) => setMedia(list => list.map(m => (m.key === key ? { ...m, ...p } : m)));
 
@@ -329,7 +331,7 @@ function NewLead({ token, onAuthFail }) {
     }
   };
 
-  const reset = () => { setF(emptyForm); setMedia([]); setSent(null); setErr(""); setDup(null); window.scrollTo(0, 0); };
+  const reset = () => { setOtherOpen(false); setF(emptyForm); setMedia([]); setSent(null); setErr(""); setDup(null); window.scrollTo(0, 0); };
 
   if (sent) return (
     <div className="ld-card ld-ok">
@@ -395,7 +397,18 @@ function NewLead({ token, onAuthFail }) {
           {Object.entries(ISSUES).map(([k, v]) => (
             <button key={k} type="button" className={`ld-chip${f.issues.includes(k) ? " on" : ""}`} onClick={() => toggleIssue(k)}>{v.label}</button>
           ))}
+          <button type="button" className={`ld-chip${otherOpen ? " on" : ""}`} onClick={() => {
+            if (otherOpen) setF(p => ({ ...p, issuesOther: "" }));
+            setOtherOpen(o => !o);
+          }}>+ Other</button>
         </div>
+        {otherOpen && (
+          <>
+            <input className="ld-input" style={{ marginTop: 10 }} autoFocus value={f.issuesOther || ""} onChange={set("issuesOther")} maxLength={300}
+              placeholder="e.g. flat tires on the front row, faded paint" />
+            <p className="ld-hint">Goes into the email list. Separate items with commas.</p>
+          </>
+        )}
       </div>
 
       <div className="ld-card">
