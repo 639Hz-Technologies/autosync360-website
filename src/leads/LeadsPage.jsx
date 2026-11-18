@@ -1,31 +1,14 @@
-// autosync360.com/leads: password-protected field tool.
-// Walk a dealer's lot → snap photos/video → enter the GM's email → Send.
+// autosync360.com/leads: password-protected field tool + mini CRM.
+// New lead: walk a dealer's lot → snap photos/video → enter the GM's email → Send.
+// Campaign: where each lead is in the email sequence. Pipe: drag leads from New lead to Contract signed, with notes.
 // Send saves the lead and emails the GM via Postmark; leads-followups sends days 3/7/14 until they reply.
 import { useEffect, useRef, useState } from "react";
 import { ISSUES } from "./issues.js";
+import Pipe from "./Pipe.jsx";
+import { C, store, AuthError, api } from "./shared.js";
 
 const TOKEN_KEY = "as360_leads_token";
 const DRAFT_KEY = "as360_leads_draft";
-const C = { bg: "#f6f8fc", card: "#fff", line: "rgba(15,23,42,0.10)", ink: "#0b1220", text: "#1e293b", mute: "#64748b", accent: "#2563eb", good: "#059669", warn: "#d97706", bad: "#dc2626" };
-
-const store = {
-  get(k) { try { return localStorage.getItem(k); } catch { return null; } },
-  set(k, v) { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch { /* private mode */ } },
-};
-
-class AuthError extends Error {}
-
-async function api(path, { token, body, method } = {}) {
-  const res = await fetch(`/api/leads/${path}`, {
-    method: method || (body ? "POST" : "GET"),
-    headers: { "content-type": "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}) },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  const data = await res.json().catch(() => ({ error: `Server error (${res.status})` }));
-  if (res.status === 401 && path !== "login") throw new AuthError(data.error);
-  if (!res.ok) throw Object.assign(new Error(data.error || "Something went wrong"), { status: res.status, data });
-  return data;
-}
 
 // Shrink phone photos (often 4–8 MB) to ~300 KB so uploads are quick on cell service.
 async function compressImage(file, maxEdge = 1600) {
@@ -66,17 +49,41 @@ const css = `
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@600;700&display=swap');
 *{box-sizing:border-box;margin:0;padding:0}
 body{margin:0;background:${C.bg}}
-.ld{min-height:100vh;background:${C.bg};font:15px/1.5 Inter,system-ui,sans-serif;color:${C.text};padding-bottom:110px}
+.ld{min-height:100vh;background:${C.bg};font:15px/1.5 Inter,system-ui,sans-serif;color:${C.text};padding-bottom:40px}
+.ld-wrap{max-width:1240px;margin:0 auto;padding:0 16px}
+.ld-wrap.wide{max-width:none}
 .ld-top{position:sticky;top:0;z-index:5;background:#fff;border-bottom:1px solid ${C.line}}
-.ld-top-in{max-width:640px;margin:0 auto;padding:10px 16px;display:flex;align-items:center;gap:12px}
+.ld-top-in{display:flex;align-items:center;justify-content:space-between;gap:12px;height:58px}
 .ld-top img{height:22px;width:auto;mix-blend-mode:multiply;display:block}
-.ld-tabs{margin-left:auto;display:flex;background:${C.bg};border:1px solid ${C.line};border-radius:10px;padding:3px}
-.ld-tabs button{border:0;background:transparent;font:600 13px Inter,sans-serif;color:${C.mute};padding:7px 11px;border-radius:8px;cursor:pointer;white-space:nowrap}
-@media(max-width:400px){.ld-top img{height:17px!important}.ld-tabs button{padding:7px 9px}}
+.ld-main{padding-top:18px}
+.ld-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.ld-tabs{margin-left:auto;display:flex;background:#fff;border:1px solid ${C.line};border-radius:12px;padding:4px}
+.ld-tabs button{border:0;background:transparent;font:600 14px Inter,sans-serif;color:${C.mute};padding:8px 14px;border-radius:9px;cursor:pointer;white-space:nowrap}
 .ld-tabs button.on{background:${C.ink};color:#fff}
-.ld-main{max-width:640px;margin:0 auto;padding:16px}
+@media(max-width:420px){.ld-top img{height:18px}.ld-tabs{margin-left:0;width:100%}.ld-tabs button{flex:1;padding:8px 6px}}
 .ld-h{font:700 24px/1.2 'Space Grotesk',sans-serif;color:${C.ink};letter-spacing:-.02em}
 .ld-card{background:#fff;border:1px solid ${C.line};border-radius:14px;padding:16px;margin-top:14px}
+.ld-toolbar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:14px;color:${C.mute};font-size:14px}
+/* New lead form: one column on phones; on desktop dealership + contact on the left, photos on the right */
+.ld-form{display:grid;gap:14px;margin-top:14px;grid-template-areas:"dealer" "photos" "who"}
+.ld-form > .ld-card{margin-top:0}
+.ld-a-dealer{grid-area:dealer}.ld-a-photos{grid-area:photos}.ld-a-who{grid-area:who}
+.ld-send{margin-top:16px;display:flex;flex-direction:column;gap:10px}
+@media(min-width:960px){
+  .ld{font-size:16px}
+  .ld-wrap{padding:0 32px}
+  .ld-top-in{height:68px}
+  .ld-top img{height:26px}
+  .ld-main{padding-top:28px}
+  .ld-h{font-size:32px}
+  .ld-card{padding:24px;border-radius:16px}
+  .ld-form{grid-template-columns:1fr 1fr;gap:20px;grid-template-areas:"dealer photos" "who photos";align-items:start;margin-top:20px}
+  .ld-send{flex-direction:row;justify-content:flex-end;align-items:center}
+  .ld-send .ld-btn.big{width:auto;min-width:320px;padding:17px 28px;font-size:17px}
+  .ld-thumbs{grid-template-columns:repeat(5,1fr)!important}
+  .ld-chip{font-size:15px!important;padding:10px 15px!important}
+  .ld-capture label{padding:28px 8px!important}
+}
 .ld-step{font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#0891b2;margin-bottom:10px}
 .ld-label{display:block;font-size:13px;font-weight:600;color:${C.ink};margin:12px 0 6px}
 .ld-label:first-of-type{margin-top:0}
@@ -105,8 +112,6 @@ body{margin:0;background:${C.bg}}
 .ld-btn:disabled{opacity:.5;cursor:default;box-shadow:none}
 .ld-btn.g{background:#fff;color:${C.text};border:1px solid ${C.line};box-shadow:none}
 .ld-btn.sm{width:auto;padding:8px 12px;font-size:13px;border-radius:9px;box-shadow:none}
-.ld-bottom{position:fixed;left:0;right:0;bottom:0;background:rgba(255,255,255,.96);backdrop-filter:blur(8px);border-top:1px solid ${C.line};padding:12px 16px calc(12px + env(safe-area-inset-bottom))}
-.ld-bottom-in{max-width:640px;margin:0 auto}
 .ld-hint{font-size:13px;color:${C.mute};margin-top:8px}
 .ld-err{background:#fef2f2;border:1px solid #fecaca;color:#991b1b;border-radius:10px;padding:10px 12px;font-size:14px;margin-top:12px}
 .ld-ac{position:relative}
@@ -127,8 +132,10 @@ body{margin:0;background:${C.bg}}
 .ld-sheet.tall{max-height:92vh;display:flex;flex-direction:column}
 .ld-preview{flex:1;min-height:50vh;width:100%;border:1px solid ${C.line};border-radius:12px;margin:10px 0 12px;background:#fff}
 .ld-subj{font-size:14px;color:${C.mute};margin-top:4px}
+@media(min-width:960px){.ld-sheet-bg{align-items:center}.ld-sheet{border-radius:18px;max-width:560px;padding:28px}.ld-sheet.tall{max-width:780px}}
 .ld-lead{display:flex;gap:12px;align-items:flex-start}
 .ld-lead + .ld-lead{border-top:1px solid ${C.line};padding-top:14px;margin-top:14px}
+@media(min-width:960px){.ld-lead{align-items:center}.ld-lead-actions{flex-direction:row!important}}
 .ld-pill{display:inline-block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;padding:3px 8px;border-radius:999px}
 .ld-login{max-width:380px;margin:12vh auto 0;padding:0 16px}
 .ld-login img{height:28px;width:auto;mix-blend-mode:multiply;display:block;margin-bottom:26px}
@@ -159,22 +166,31 @@ export default function LeadsPage() {
   const logout = () => { store.set(TOKEN_KEY, null); setToken(null); };
   const login = t => { store.set(TOKEN_KEY, t); setToken(t); };
 
+  const TITLES = { new: "New lot visit", list: "Campaign", pipe: "Pipeline" };
+  const pick = t => { setTab(t); window.scrollTo(0, 0); };
+
   return (
     <div className="ld">
       <style>{css}</style>
       {!token ? <Login onLogin={login} /> : (
         <>
-          <div className="ld-top"><div className="ld-top-in">
+          <header className="ld-top"><div className={`ld-wrap${tab === "pipe" ? " wide" : ""} ld-top-in`}>
             <img src="/autosync360-wordmark.png" alt="AutoSync 360" />
-            <div className="ld-tabs">
-              <button className={tab === "new" ? "on" : ""} onClick={() => setTab("new")}>New lead</button>
-              <button className={tab === "list" ? "on" : ""} onClick={() => setTab("list")}>Campaign</button>
+            <button className="ld-btn sm g" onClick={logout}>Log out</button>
+          </div></header>
+          <main className={`ld-wrap${tab === "pipe" ? " wide" : ""} ld-main`}>
+            <div className="ld-head">
+              <h1 className="ld-h">{TITLES[tab]}</h1>
+              <nav className="ld-tabs">
+                <button className={tab === "new" ? "on" : ""} onClick={() => pick("new")}>New lead</button>
+                <button className={tab === "list" ? "on" : ""} onClick={() => pick("list")}>Campaign</button>
+                <button className={tab === "pipe" ? "on" : ""} onClick={() => pick("pipe")}>Pipe</button>
+              </nav>
             </div>
-          </div></div>
-          <div className="ld-main">
-            {tab === "new" ? <NewLead token={token} onAuthFail={logout} /> : <Campaign token={token} onAuthFail={logout} />}
-            <p className="ld-hint" style={{ textAlign: "center", marginTop: 28 }}><a className="ld-link" href="#" onClick={e => { e.preventDefault(); logout(); }}>Log out</a></p>
-          </div>
+            {tab === "new" && <NewLead token={token} onAuthFail={logout} />}
+            {tab === "list" && <Campaign token={token} onAuthFail={logout} />}
+            {tab === "pipe" && <Pipe token={token} onAuthFail={logout} />}
+          </main>
         </>
       )}
     </div>
@@ -350,9 +366,8 @@ function NewLead({ token, onAuthFail }) {
 
   return (
     <>
-      <h1 className="ld-h">New lot visit</h1>
-
-      <div className="ld-card">
+      <div className="ld-form">
+      <div className="ld-card ld-a-dealer">
         <div className="ld-step">1 · Dealership</div>
         <label className="ld-label" htmlFor="dl">Dealership name</label>
         <DealerSearch token={token} onAuthFail={onAuthFail} value={f.dealership}
@@ -369,7 +384,7 @@ function NewLead({ token, onAuthFail }) {
         )}
       </div>
 
-      <div className="ld-card">
+      <div className="ld-card ld-a-photos">
         <div className="ld-step">2 · Photos & video</div>
         <div className="ld-capture">
           <label>
@@ -395,7 +410,7 @@ function NewLead({ token, onAuthFail }) {
             ))}
           </div>
         )}
-        <p className="ld-hint">{uploading ? "Uploading…" : ready.length ? `${ready.length} uploaded. The first 4 photos go in the email; everything shows on their lot page.` : "Dirty wheels, dusty hoods, water spots: get close."}</p>
+        <p className="ld-hint">{uploading ? "Uploading…" : ready.length ? `${ready.length} uploaded. The first 2 photos go in the email; everything shows on their lot page.` : "Dirty wheels, dusty hoods, water spots: get close."}</p>
 
         <label className="ld-label" style={{ marginTop: 16 }}>What did you see?</label>
         <div className="ld-chips">
@@ -416,7 +431,7 @@ function NewLead({ token, onAuthFail }) {
         )}
       </div>
 
-      <div className="ld-card">
+      <div className="ld-card ld-a-who">
         <div className="ld-step">3 · Who gets the email</div>
         <div className="ld-row">
           <div>
@@ -442,6 +457,7 @@ function NewLead({ token, onAuthFail }) {
           <div><b>Test run</b><span>Sends all 4 emails 1 minute apart so you can see the whole sequence. Use your own email.</span></div>
         </label>
       </div>
+      </div>
 
       {err && <div className="ld-err">{err}</div>}
       {dup && (
@@ -451,11 +467,12 @@ function NewLead({ token, onAuthFail }) {
         </div>
       )}
 
-      <div className="ld-bottom"><div className="ld-bottom-in">
-        <button className="ld-btn" disabled={!canSend || sending} onClick={() => setConfirming(true)}>
+      <div className="ld-send">
+        {!canSend && !uploading && <span className="ld-hint" style={{ margin: 0 }}>{!f.dealership.trim() ? "Add the dealership" : !ready.length ? "Add at least one photo or video" : "Add the GM's email"} to send.</span>}
+        <button className="ld-btn big" disabled={!canSend || sending} onClick={() => setConfirming(true)}>
           {uploading ? "Uploading…" : sending ? "Sending…" : f.testMode ? "Send test run" : "Send & start campaign"}
         </button>
-      </div></div>
+      </div>
 
       {confirming && (
         <div className="ld-sheet-bg" onClick={() => setConfirming(false)}>
@@ -515,8 +532,8 @@ function Campaign({ token, onAuthFail }) {
 
   return (
     <>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <h1 className="ld-h">Campaign</h1>
+      <div className="ld-toolbar">
+        <span>{leads ? `${leads.length} lead${leads.length === 1 ? "" : "s"}` : ""}</span>
         <button className="ld-btn sm g" onClick={() => { setLeads(null); load(); }}>Refresh</button>
       </div>
       {err && <div className="ld-err">{err}</div>}
@@ -537,7 +554,7 @@ function Campaign({ token, onAuthFail }) {
                   <a className="ld-link" href={l.report_url} target="_blank" rel="noopener">Lot page</a>
                 </div>
               </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <div className="ld-lead-actions" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                 {l.status === "active" && <>
                   <button className="ld-btn sm" disabled={busy === l.id} onClick={() => setStatus(l.id, "replied")}>Replied</button>
                   <button className="ld-btn sm g" disabled={busy === l.id} onClick={() => setStatus(l.id, "stopped")}>Stop</button>

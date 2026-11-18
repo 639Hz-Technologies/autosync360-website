@@ -6,6 +6,9 @@
 //   POST /api/leads/preview {same as send}             → {subject, html} of email 1, nothing sent
 //   GET  /api/leads/list                               → recent leads for the Campaign tab
 //   POST /api/leads/status  {id, status}               → replied / stopped (no more follow-ups)
+//   POST /api/leads/stage   {id, stage}                → move on the Pipe board (leaving "new" stops the emails)
+//   POST /api/leads/note    {id, text}                 → add a note to the lead
+//   POST /api/leads/demo    {id, demoAt}               → set/clear the demo date (moves New/Replied → Demo scheduled)
 //   POST /api/leads/places  {input, sessionToken, lat, lng} → Google car-dealer suggestions
 //   POST /api/leads/place   {placeId, sessionToken}    → name, address, website, phone for the picked dealer
 import crypto from "node:crypto";
@@ -40,6 +43,21 @@ async function emailDomainProblem(email) {
 }
 const EXT = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/heic": "heic", "video/mp4": "mp4", "video/quicktime": "mov", "video/webm": "webm", "video/x-m4v": "m4v" };
 const clean = (s, max = 300) => String(s ?? "").trim().slice(0, max);
+const STAGES = ["new", "replied", "demo_scheduled", "demo_completed", "vendor_setup", "proposal_sent", "closed_won", "lost"];
+const now = () => new Date().toISOString();
+
+async function getLead(id) {
+  if (!/^[0-9a-f-]{36}$/.test(String(id))) return null;
+  const [row] = await db.select(`select=id,status,pipeline_stage,notes_log,history&id=eq.${id}&limit=1`);
+  return row || null;
+}
+
+// Moving a lead on the board. Anything past "new" means you're talking to them: stop the email sequence.
+function stagePatch(row, stage) {
+  const p = { pipeline_stage: stage, stage_changed_at: now(), history: [...(row.history || []), { at: now(), event: `stage: ${stage}` }] };
+  if (stage !== "new" && row.status === "active") Object.assign(p, { status: "replied", next_send_at: null });
+  return p;
+}
 
 export default async (req) => {
   const route = new URL(req.url).pathname.replace(/^\/api\/leads\/?/, "");
@@ -100,16 +118,45 @@ export default async (req) => {
     }
 
     if (route === "list" && req.method === "GET") {
-      const rows = await db.select("select=id,created_at,dealership,address,contact_name,contact_email,status,media,step,next_send_at,last_sent_at,test_mode&order=created_at.desc&limit=100");
+      const rows = await db.select("select=id,created_at,dealership,address,contact_name,contact_title,contact_email,phone,website,status,media,step,next_send_at,last_sent_at,test_mode,pipeline_stage,stage_changed_at,demo_at,notes,notes_log,issues,issues_other&order=created_at.desc&limit=300");
       return json({ leads: rows.map(r => ({ ...r, report_url: reportUrl(r.id), media_count: (r.media || []).length, media: undefined })) });
     }
 
     if (route === "status" && req.method === "POST") {
       const { id, status } = await req.json();
       if (!["replied", "stopped"].includes(status)) return json({ error: "Bad status" }, 400);
-      const row = await db.update(id, { status, next_send_at: null });
-      if (!row) return json({ error: "Lead not found" }, 404);
+      const cur = await getLead(id);
+      if (!cur) return json({ error: "Lead not found" }, 404);
+      const row = await db.update(id, { status, next_send_at: null, ...(status === "replied" && cur.pipeline_stage === "new" ? { pipeline_stage: "replied", stage_changed_at: now() } : {}) });
       return json({ ok: true, status });
+    }
+
+    if (route === "stage" && req.method === "POST") {
+      const { id, stage } = await req.json();
+      if (!STAGES.includes(stage)) return json({ error: "Unknown stage" }, 400);
+      const row = await getLead(id);
+      if (!row) return json({ error: "Lead not found" }, 404);
+      return json({ lead: await db.update(id, stagePatch(row, stage)) });
+    }
+
+    if (route === "note" && req.method === "POST") {
+      const { id, text } = await req.json();
+      const t = clean(text, 4000);
+      if (!t) return json({ error: "Note is empty" }, 400);
+      const row = await getLead(id);
+      if (!row) return json({ error: "Lead not found" }, 404);
+      return json({ lead: await db.update(id, { notes_log: [...(row.notes_log || []), { at: now(), text: t }] }) });
+    }
+
+    if (route === "demo" && req.method === "POST") {
+      const { id, demoAt } = await req.json();
+      const when = demoAt ? new Date(demoAt) : null;
+      if (when && isNaN(when)) return json({ error: "Bad date" }, 400);
+      const row = await getLead(id);
+      if (!row) return json({ error: "Lead not found" }, 404);
+      const patch = { demo_at: when ? when.toISOString() : null };
+      if (when && ["new", "replied"].includes(row.pipeline_stage)) Object.assign(patch, stagePatch(row, "demo_scheduled"));
+      return json({ lead: await db.update(id, patch) });
     }
 
     return json({ error: "Not found" }, 404);

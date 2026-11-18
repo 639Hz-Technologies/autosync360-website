@@ -178,7 +178,7 @@ export async function runFollowups({ limit = 15, now: nowDate = new Date() } = {
         const seen = await inbox.check(lead.contact_email, lead.created_at);
         if (seen) {
           const status = { replied: "replied", bounced: "failed", complained: "unsubscribed" }[seen];
-          await db.update(lead.id, { status, next_send_at: null, history: [...(lead.history || []), { at: now, event: `${seen} (detected)` }] });
+          await db.update(lead.id, { status, next_send_at: null, ...(seen === "replied" && lead.pipeline_stage === "new" ? { pipeline_stage: "replied", stage_changed_at: now } : {}), history: [...(lead.history || []), { at: now, event: `${seen} (detected)` }] });
           result[seen === "replied" ? "replied" : "failed"]++;
           continue;
         }
