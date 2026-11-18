@@ -9,8 +9,8 @@ import { esc } from "./leads.mjs";
 // Days after email 1 that each email goes out (follow-ups go on weekdays, during business hours).
 export const SCHEDULE_DAYS = [0, 3, 7, 14];
 
-// The opening line of email 1. Change it here to tone it down (e.g. "your lot looks rough.").
-const OPENER = "I'll be straight with you: your lot looks like shit.";
+// The opening line of email 1. Kept blunt but clean: profanity gets cold email flagged by dealer spam filters.
+const OPENER = "I'll be straight with you: your lot looks rough.";
 
 // The offer, used in email 1 and repeated in the follow-ups.
 const OFFER = "Here's my offer: give us your dirtiest vehicle and we'll detail it for $1. That $1 gets us set up in your system as a paid vendor, so when you're ready to make the switch, we're already one step closer.";
