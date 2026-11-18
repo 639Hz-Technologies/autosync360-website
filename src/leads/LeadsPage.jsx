@@ -1,6 +1,6 @@
 // autosync360.com/leads: password-protected field tool.
 // Walk a dealer's lot → snap photos/video → enter the GM's email → Send.
-// Send saves the lead and fires a Klaviyo event; the Klaviyo flow sends email 1 and the follow-ups.
+// Send saves the lead and emails the GM from your Gmail; leads-followups sends days 3/7/14 until they reply.
 import { useEffect, useRef, useState } from "react";
 import { ISSUES } from "./issues.js";
 
@@ -69,7 +69,7 @@ body{margin:0;background:${C.bg}}
 .ld{min-height:100vh;background:${C.bg};font:15px/1.5 Inter,system-ui,sans-serif;color:${C.text};padding-bottom:110px}
 .ld-top{position:sticky;top:0;z-index:5;background:#fff;border-bottom:1px solid ${C.line}}
 .ld-top-in{max-width:640px;margin:0 auto;padding:10px 16px;display:flex;align-items:center;gap:12px}
-.ld-top img{height:26px}
+.ld-top img{height:22px;width:auto;mix-blend-mode:multiply;display:block}
 .ld-tabs{margin-left:auto;display:flex;background:${C.bg};border:1px solid ${C.line};border-radius:10px;padding:3px}
 .ld-tabs button{border:0;background:transparent;font:600 13px Inter,sans-serif;color:${C.mute};padding:7px 12px;border-radius:8px;cursor:pointer}
 .ld-tabs button.on{background:${C.ink};color:#fff}
@@ -118,11 +118,14 @@ body{margin:0;background:${C.bg}}
 .ld-sheet{background:#fff;width:100%;max-width:640px;border-radius:18px 18px 0 0;padding:20px 16px calc(20px + env(safe-area-inset-bottom))}
 .ld-sheet ol{margin:12px 0 16px 20px;color:${C.text}}
 .ld-sheet li{margin:4px 0}
+.ld-sheet.tall{max-height:92vh;display:flex;flex-direction:column}
+.ld-preview{flex:1;min-height:50vh;width:100%;border:1px solid ${C.line};border-radius:12px;margin:10px 0 12px;background:#fff}
+.ld-subj{font-size:14px;color:${C.mute};margin-top:4px}
 .ld-lead{display:flex;gap:12px;align-items:flex-start}
 .ld-lead + .ld-lead{border-top:1px solid ${C.line};padding-top:14px;margin-top:14px}
 .ld-pill{display:inline-block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;padding:3px 8px;border-radius:999px}
 .ld-login{max-width:380px;margin:12vh auto 0;padding:0 16px}
-.ld-login img{height:34px;margin-bottom:22px}
+.ld-login img{height:28px;width:auto;mix-blend-mode:multiply;display:block;margin-bottom:26px}
 a.ld-link{color:${C.accent};font-weight:600;text-decoration:none}
 `;
 
@@ -156,7 +159,7 @@ export default function LeadsPage() {
       {!token ? <Login onLogin={login} /> : (
         <>
           <div className="ld-top"><div className="ld-top-in">
-            <img src="/autosync360-logo.png" alt="AutoSync 360" />
+            <img src="/autosync360-wordmark.png" alt="AutoSync 360" />
             <div className="ld-tabs">
               <button className={tab === "new" ? "on" : ""} onClick={() => setTab("new")}>New lead</button>
               <button className={tab === "list" ? "on" : ""} onClick={() => setTab("list")}>Campaign</button>
@@ -184,7 +187,7 @@ function Login({ onLogin }) {
   };
   return (
     <form className="ld-login" onSubmit={submit}>
-      <img src="/autosync360-logo.png" alt="AutoSync 360" />
+      <img src="/autosync360-wordmark.png" alt="AutoSync 360" />
       <h1 className="ld-h">Field leads</h1>
       <p className="ld-hint" style={{ marginBottom: 18 }}>Team login</p>
       <input className="ld-input" type="password" autoComplete="current-password" placeholder="Password" value={pw} onChange={e => setPw(e.target.value)} autoFocus />
@@ -271,6 +274,7 @@ function NewLead({ token, onAuthFail }) {
   // media item: { key, kind: "image"|"video", preview, status: "uploading"|"done"|"error", progress, path, error }
   const [media, setMedia] = useState(draft?.media || []);
   const [confirming, setConfirming] = useState(false);
+  const [preview, setPreview] = useState(null); // {subject, html, from} | "loading"
   const [sending, setSending] = useState(false);
   const [err, setErr] = useState("");
   const [dup, setDup] = useState(null);
@@ -331,7 +335,7 @@ function NewLead({ token, onAuthFail }) {
     <div className="ld-card ld-ok">
       <div className="big">✓</div>
       <h2 className="ld-h">Sent to {sent.email}</h2>
-      <p className="ld-hint" style={{ fontSize: 15 }}>{sent.dealership} is in the campaign. Klaviyo sends the first email now and follows up on days 3, 7 and 14 unless they reply.</p>
+      <p className="ld-hint" style={{ fontSize: 15 }}>{sent.dealership} is in the campaign. Follow-ups go out on days 3, 7 and 14, and stop automatically as soon as they reply.</p>
       <p style={{ margin: "16px 0 22px" }}><a className="ld-link" href={sent.report_url} target="_blank" rel="noopener">View their lot page →</a></p>
       <button className="ld-btn" onClick={reset}>Next dealership</button>
     </div>
@@ -437,16 +441,34 @@ function NewLead({ token, onAuthFail }) {
             <h2 className="ld-h" style={{ fontSize: 20 }}>Send to {f.email.trim()}?</h2>
             <ol>
               <li><b>Now:</b> email about {f.dealership.trim()} with a link to its lot page ({ready.length} file{ready.length === 1 ? "" : "s"})</li>
-              <li><b>Day 3, 7, 14:</b> follow-ups, unless you mark them Replied</li>
+              <li><b>Day 3, 7, 14:</b> follow-ups in the same thread. They stop as soon as they reply.</li>
             </ol>
+            <button className="ld-btn g" style={{ marginBottom: 10 }} disabled={preview === "loading"} onClick={async () => {
+              setPreview("loading");
+              try { setPreview(await api("preview", { token, body: { ...f, media: ready.map(m => ({ path: m.path, type: m.kind })) } })); }
+              catch (x) { if (x instanceof AuthError) return onAuthFail(); setErr(x.message); setPreview(null); }
+            }}>{preview === "loading" ? "Loading…" : "Preview email"}</button>
             <button className="ld-btn" onClick={() => send(false)} disabled={sending}>{sending ? "Sending…" : "Send"}</button>
             <button className="ld-btn g" style={{ marginTop: 10 }} onClick={() => setConfirming(false)}>Back</button>
+          </div>
+        </div>
+      )}
+
+      {preview && preview !== "loading" && (
+        <div className="ld-sheet-bg" style={{ zIndex: 30 }} onClick={() => setPreview(null)}>
+          <div className="ld-sheet tall" onClick={e => e.stopPropagation()}>
+            <h2 className="ld-h" style={{ fontSize: 18 }}>{preview.subject}</h2>
+            <div className="ld-subj">From {preview.from} · to {f.email.trim()}</div>
+            <iframe className="ld-preview" title="Email preview" sandbox="" srcDoc={preview.html} />
+            <button className="ld-btn g" onClick={() => setPreview(null)}>Close preview</button>
           </div>
         </div>
       )}
     </>
   );
 }
+
+const shortDate = d => new Date(d).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 
 function Campaign({ token, onAuthFail }) {
   const [leads, setLeads] = useState(null);
@@ -460,7 +482,7 @@ function Campaign({ token, onAuthFail }) {
     setBusy(id); setErr("");
     try {
       await api("status", { token, body: { id, status } });
-      setLeads(ls => ls.map(l => (l.id === id ? { ...l, status } : l)));
+      setLeads(ls => ls.map(l => (l.id === id ? { ...l, status, next_send_at: null } : l)));
     } catch (x) {
       if (x instanceof AuthError) return onAuthFail();
       setErr(x.message);
@@ -483,6 +505,7 @@ function Campaign({ token, onAuthFail }) {
                 <div className="ld-hint" style={{ marginTop: 6, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
                   <span className="ld-pill" style={{ background: bg, color: fg }}>{label}</span>
                   <span>{days === 0 ? "today" : `${days}d ago`} · {l.media_count} file{l.media_count === 1 ? "" : "s"}</span>
+                  {l.step > 0 && <span>· {l.step} of 4 emails sent{l.status === "active" && l.next_send_at ? ` · next ${shortDate(l.next_send_at)}` : ""}</span>}
                   <a className="ld-link" href={l.report_url} target="_blank" rel="noopener">Lot page</a>
                 </div>
               </div>

@@ -18,7 +18,7 @@ body{font:16px/1.6 Inter,system-ui,sans-serif;color:#1e293b;background:#f6f8fc}
 .wrap{max-width:980px;margin:0 auto;padding:0 16px}
 header{background:#fff;border-bottom:1px solid rgba(15,23,42,.09)}
 header .wrap{display:flex;align-items:center;justify-content:space-between;height:64px}
-header img{height:30px}
+header img{height:24px;width:auto;mix-blend-mode:multiply;display:block}
 h1{font:700 clamp(26px,4vw,38px)/1.15 'Space Grotesk',sans-serif;letter-spacing:-.02em;color:#0b1220}
 .eyebrow{font-size:12px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:#0891b2}
 .intro{padding:40px 0 24px}.intro p{color:#64748b;margin-top:10px;max-width:640px}
@@ -33,7 +33,7 @@ video{width:100%;border-radius:12px;background:#000;margin-bottom:12px;max-heigh
 .btn.g{background:transparent;color:#1e293b;border:1px solid rgba(15,23,42,.15)}
 footer{color:#94a3b8;font-size:13px;padding:0 0 32px}
 </style></head><body>
-<header><div class="wrap"><a href="/"><img src="/autosync360-logo.png" alt="AutoSync 360"></a><a class="btn g" href="${PHONE_HREF}" style="margin:0">${PHONE}</a></div></header>
+<header><div class="wrap"><a href="/"><img src="/autosync360-wordmark.png" alt="AutoSync 360"></a><a class="btn g" href="${PHONE_HREF}" style="margin:0">${PHONE}</a></div></header>
 <main class="wrap">${body}</main>
 <footer class="wrap">© ${new Date().getFullYear()} AutoSync 360</footer>
 </body></html>`, {
