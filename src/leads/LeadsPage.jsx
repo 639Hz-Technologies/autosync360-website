@@ -103,6 +103,15 @@ body{margin:0;background:${C.bg}}
 .ld-bottom-in{max-width:640px;margin:0 auto}
 .ld-hint{font-size:13px;color:${C.mute};margin-top:8px}
 .ld-err{background:#fef2f2;border:1px solid #fecaca;color:#991b1b;border-radius:10px;padding:10px 12px;font-size:14px;margin-top:12px}
+.ld-ac{position:relative}
+.ld-ac-list{position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:10;background:#fff;border:1px solid ${C.line};border-radius:12px;box-shadow:0 12px 32px rgba(15,23,42,.14);overflow:hidden}
+.ld-ac-list button{display:block;width:100%;text-align:left;border:0;background:#fff;padding:12px 14px;font:15px Inter,sans-serif;color:${C.text};cursor:pointer;border-bottom:1px solid ${C.line}}
+.ld-ac-list button:hover,.ld-ac-list button:focus{background:${C.bg};outline:none}
+.ld-ac-list small{display:block;color:${C.mute};font-size:13px;margin-top:1px}
+.ld-ac-foot{padding:6px 14px;font-size:11px;color:${C.mute};text-align:right}
+.ld-found{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:center;font-size:13px;color:${C.good};margin-top:8px}
+.ld-found a{color:${C.accent};text-decoration:none;font-weight:600}
+.ld-domain{margin-top:8px;border:1px dashed rgba(37,99,235,.45);background:rgba(37,99,235,.05);color:${C.accent};border-radius:999px;padding:6px 12px;font:600 13px Inter,sans-serif;cursor:pointer}
 .ld-ok{text-align:center;padding:40px 8px}
 .ld-ok .big{width:64px;height:64px;border-radius:50%;background:rgba(5,150,105,.12);color:${C.good};font-size:32px;line-height:64px;margin:0 auto 14px}
 .ld-sheet-bg{position:fixed;inset:0;background:rgba(11,18,32,.45);z-index:20;display:flex;align-items:flex-end;justify-content:center}
@@ -185,10 +194,75 @@ function Login({ onLogin }) {
   );
 }
 
-const emptyForm = { dealership: "", address: "", contactName: "", contactTitle: "General Manager", email: "", issues: [], notes: "" };
+const emptyForm = { dealership: "", address: "", placeId: "", website: "", phone: "", contactName: "", contactTitle: "General Manager", email: "", issues: [], notes: "" };
 
 function loadDraft() {
   try { return JSON.parse(store.get(DRAFT_KEY)) || null; } catch { return null; }
+}
+
+const domainOf = url => { try { return new URL(url).hostname.replace(/^www\./, ""); } catch { return ""; } };
+
+// Dealership name box: suggests car dealers from Google near where you're standing; picking one fills in the address.
+function DealerSearch({ token, onAuthFail, value, onType, onPick }) {
+  const [list, setList] = useState([]);
+  const [open, setOpen] = useState(false);
+  const session = useRef(crypto.randomUUID());
+  const coords = useRef(null);
+  const asked = useRef(false);
+  const off = useRef(false); // server has no Google key: behave like a plain text box
+  const timer = useRef();
+  const seq = useRef(0);
+
+  const locate = () => {
+    if (asked.current || !navigator.geolocation) return;
+    asked.current = true;
+    navigator.geolocation.getCurrentPosition(p => { coords.current = { lat: p.coords.latitude, lng: p.coords.longitude }; }, () => {}, { timeout: 8000, maximumAge: 600000 });
+  };
+
+  const search = q => {
+    clearTimeout(timer.current);
+    if (off.current || q.trim().length < 2) { setList([]); return; }
+    timer.current = setTimeout(async () => {
+      const n = ++seq.current;
+      try {
+        const r = await api("places", { token, body: { input: q, sessionToken: session.current, ...(coords.current || {}) } });
+        if (r.disabled) off.current = true;
+        if (n === seq.current) { setList(r.suggestions || []); setOpen(true); }
+      } catch (x) {
+        if (x instanceof AuthError) onAuthFail();
+      }
+    }, 250);
+  };
+
+  const pick = async s => {
+    setOpen(false); setList([]);
+    onPick({ name: s.name, address: s.secondary, placeId: s.placeId, website: "", phone: "" });
+    try {
+      onPick(await api("place", { token, body: { placeId: s.placeId, sessionToken: session.current } }));
+    } catch (x) {
+      if (x instanceof AuthError) onAuthFail();
+    }
+    session.current = crypto.randomUUID(); // Google bills a search + pick as one session
+  };
+
+  return (
+    <div className="ld-ac">
+      <input id="dl" className="ld-input" value={value} placeholder="Start typing: Sunshine Ford…" autoComplete="off"
+        onFocus={() => { locate(); list.length && setOpen(true); }}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        onChange={e => { onType(e.target.value); search(e.target.value); }} />
+      {open && list.length > 0 && (
+        <div className="ld-ac-list">
+          {list.map(s => (
+            <button key={s.placeId} type="button" onMouseDown={e => e.preventDefault()} onClick={() => pick(s)}>
+              <b>{s.name}</b><small>{s.secondary}</small>
+            </button>
+          ))}
+          <div className="ld-ac-foot">Results from Google</div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function NewLead({ token, onAuthFail }) {
@@ -270,9 +344,18 @@ function NewLead({ token, onAuthFail }) {
       <div className="ld-card">
         <div className="ld-step">1 · Dealership</div>
         <label className="ld-label" htmlFor="dl">Dealership name</label>
-        <input id="dl" className="ld-input" value={f.dealership} onChange={set("dealership")} placeholder="Sunshine Ford" autoComplete="organization" />
+        <DealerSearch token={token} onAuthFail={onAuthFail} value={f.dealership}
+          onType={v => setF(p => ({ ...p, dealership: v, placeId: "", website: "", phone: "" }))}
+          onPick={d => setF(p => ({ ...p, dealership: d.name, address: d.address || p.address, placeId: d.placeId, website: d.website, phone: d.phone }))} />
         <label className="ld-label" htmlFor="ad">Address</label>
-        <input id="ad" className="ld-input" value={f.address} onChange={set("address")} placeholder="1200 Main St, Orlando, FL" autoComplete="street-address" />
+        <input id="ad" className="ld-input" value={f.address} onChange={set("address")} placeholder="Pick the dealership above to fill this in" autoComplete="street-address" />
+        {f.placeId && (
+          <div className="ld-found">
+            <span>✓ Matched on Google</span>
+            {f.website && <a href={f.website} target="_blank" rel="noopener">{domainOf(f.website)}</a>}
+            {f.phone && <a href={`tel:${f.phone.replace(/[^\d+]/g, "")}`}>{f.phone}</a>}
+          </div>
+        )}
       </div>
 
       <div className="ld-card">
@@ -324,7 +407,12 @@ function NewLead({ token, onAuthFail }) {
           </div>
         </div>
         <label className="ld-label" htmlFor="em">Email</label>
-        <input id="em" className="ld-input" type="email" inputMode="email" autoCapitalize="none" value={f.email} onChange={set("email")} placeholder="gm@dealership.com" autoComplete="off" />
+        <input id="em" className="ld-input" type="email" inputMode="email" autoCapitalize="none" value={f.email} onChange={set("email")} placeholder={f.website ? `gm@${domainOf(f.website)}` : "gm@dealership.com"} autoComplete="off" />
+        {f.website && !f.email.includes("@") && (
+          <button type="button" className="ld-domain" onClick={() => setF(p => ({ ...p, email: `${p.email.trim()}@${domainOf(p.website)}` }))}>
+            {f.email.trim() ? `${f.email.trim()}@${domainOf(f.website)}` : `Add @${domainOf(f.website)}`}
+          </button>
+        )}
         <label className="ld-label" htmlFor="nt">Notes (internal, not emailed)</label>
         <textarea id="nt" className="ld-input" rows={3} value={f.notes} onChange={set("notes")} placeholder="Spoke to the porter, GM is in Tues–Sat…" />
       </div>

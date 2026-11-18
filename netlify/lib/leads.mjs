@@ -7,6 +7,7 @@
 //   KLAVIYO_PRIVATE_KEY        Klaviyo private API key with Events + Profiles write access
 //   LEADS_SENDER_NAME          optional, the name signed on the emails (passed to Klaviyo as `sender_name`)
 //   SITE_URL                   optional, defaults to https://autosync360.com
+//   GOOGLE_MAPS_API_KEY        optional, enables the Google dealership lookup (Places API (New))
 import crypto from "node:crypto";
 
 export const BUCKET = "lead-media";
@@ -132,6 +133,47 @@ export function klaviyoSetStatus(email, status) {
   return klaviyo("profile-import", {
     data: { type: "profile", attributes: { email, properties: { lead_status: status } } },
   });
+}
+
+// ---- Google Places (New): dealership lookup on the form. Optional: without GOOGLE_MAPS_API_KEY the form is plain text. ----
+export const placesEnabled = () => !!env("GOOGLE_MAPS_API_KEY");
+
+async function places(path, init) {
+  const res = await fetch(`https://places.googleapis.com/v1/${path}`, {
+    ...init,
+    headers: { "x-goog-api-key": env("GOOGLE_MAPS_API_KEY"), "content-type": "application/json", ...(init.headers || {}) },
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(`Google Places ${res.status}: ${data?.error?.message || "request failed"}`);
+  return data;
+}
+
+// Car dealers matching what was typed, biased toward where the rep is standing.
+export async function placesAutocomplete({ input, sessionToken, lat, lng }) {
+  const body = { input, sessionToken, includedPrimaryTypes: ["car_dealer"], includedRegionCodes: ["us"] };
+  if (Number.isFinite(lat) && Number.isFinite(lng)) body.locationBias = { circle: { center: { latitude: lat, longitude: lng }, radius: 40000 } };
+  const data = await places("places:autocomplete", { method: "POST", body: JSON.stringify(body) });
+  return (data.suggestions || []).map(s => s.placePrediction).filter(Boolean).slice(0, 5).map(p => ({
+    placeId: p.placeId,
+    name: p.structuredFormat?.mainText?.text || p.text?.text || "",
+    secondary: p.structuredFormat?.secondaryText?.text || "",
+  }));
+}
+
+export async function placeDetails({ placeId, sessionToken }) {
+  if (!/^[A-Za-z0-9_-]{10,300}$/.test(placeId || "")) throw new Error("Bad place id");
+  const qs = sessionToken ? `?sessionToken=${encodeURIComponent(sessionToken)}` : "";
+  const p = await places(`places/${placeId}${qs}`, {
+    method: "GET",
+    headers: { "x-goog-fieldmask": "id,displayName,formattedAddress,websiteUri,nationalPhoneNumber" },
+  });
+  return {
+    placeId: p.id,
+    name: p.displayName?.text || "",
+    address: (p.formattedAddress || "").replace(/, USA$/, ""),
+    website: p.websiteUri || "",
+    phone: p.nationalPhoneNumber || "",
+  };
 }
 
 export const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));

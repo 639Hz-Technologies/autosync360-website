@@ -30,6 +30,10 @@ Tap **Replied** or **Stop** on the Campaign tab: that sets the profile's `lead_s
    - `SUPABASE_URL`: `https://ikxcgwrhfwdzifqfoqbk.supabase.co`
    - `SUPABASE_SERVICE_ROLE_KEY`: Supabase → Auto Sync App → Project Settings → API keys → `service_role` (secret)
    - `LEADS_SENDER_NAME`: the name to sign the emails with
+   - `GOOGLE_MAPS_API_KEY` (optional, but you want it): turns on the dealership lookup. Typing "Sunshine" suggests nearby
+     car dealers from Google; picking one fills in the exact name, address, website and phone, and offers `@theirdomain.com`
+     for the email. Create it in Google Cloud Console → APIs & Services: enable **Places API (New)**, create an API key, and
+     restrict it to that API. The key stays on the server. Cost is a fraction of a cent per lookup, well inside Google's free monthly credit at field volume.
 3. Redeploy (or push) so the functions pick them up.
 
 ## 3. Templates

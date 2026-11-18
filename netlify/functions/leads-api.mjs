@@ -5,11 +5,13 @@
 //                                                      → saves the lead, fires the Klaviyo event that starts the email flow
 //   GET  /api/leads/list                               → recent leads for the Campaign tab
 //   POST /api/leads/status  {id, status}               → replied / stopped / active (mirrored to Klaviyo)
+//   POST /api/leads/places  {input, sessionToken, lat, lng} → Google car-dealer suggestions
+//   POST /api/leads/place   {placeId, sessionToken}    → name, address, website, phone for the picked dealer
 import crypto from "node:crypto";
 import { ISSUES, issuesSentence } from "../../src/leads/issues.js";
 import {
   json, missingEnv, checkPassword, issueToken, isAuthed, db, signedUpload, MEDIA_PATH, mediaUrl, reportUrl,
-  klaviyoLotVisit, klaviyoSetStatus,
+  klaviyoLotVisit, klaviyoSetStatus, placesEnabled, placesAutocomplete, placeDetails,
 } from "../lib/leads.mjs";
 
 export const config = { path: "/api/leads/*" };
@@ -47,6 +49,19 @@ export default async (req) => {
       return json({ path, uploadUrl: await signedUpload(path), url: mediaUrl(path) });
     }
 
+    if (route === "places" && req.method === "POST") {
+      if (!placesEnabled()) return json({ disabled: true, suggestions: [] });
+      const { input, sessionToken, lat, lng } = await req.json();
+      if (clean(input).length < 2) return json({ suggestions: [] });
+      return json({ suggestions: await placesAutocomplete({ input: clean(input, 120), sessionToken: clean(sessionToken, 64), lat: lat == null ? NaN : Number(lat), lng: lng == null ? NaN : Number(lng) }) });
+    }
+
+    if (route === "place" && req.method === "POST") {
+      if (!placesEnabled()) return json({ error: "Google lookup isn't set up." }, 400);
+      const { placeId, sessionToken } = await req.json();
+      return json(await placeDetails({ placeId, sessionToken: clean(sessionToken, 64) }));
+    }
+
     if (route === "send" && req.method === "POST") return await send(await req.json());
 
     if (route === "list" && req.method === "GET") {
@@ -77,6 +92,9 @@ async function send(body) {
     contact_name: clean(body.contactName, 120),
     contact_title: clean(body.contactTitle, 80),
     contact_email: clean(body.email, 200).toLowerCase(),
+    place_id: clean(body.placeId, 300) || null,
+    website: clean(body.website, 300) || null,
+    phone: clean(body.phone, 40) || null,
     issues: (Array.isArray(body.issues) ? body.issues : []).filter(k => ISSUES[k]),
     notes: clean(body.notes, 2000),
     media: (Array.isArray(body.media) ? body.media : [])
