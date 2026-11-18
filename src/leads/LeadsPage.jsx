@@ -65,9 +65,12 @@ body{margin:0;background:${C.bg}}
 .ld-card{background:#fff;border:1px solid ${C.line};border-radius:14px;padding:16px;margin-top:14px}
 .ld-toolbar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:14px;color:${C.mute};font-size:14px}
 /* New lead form: one column on phones; on desktop dealership + contact on the left, photos on the right */
-.ld-form{display:grid;gap:14px;margin-top:14px;grid-template-areas:"dealer" "photos" "who"}
-.ld-form > .ld-card{margin-top:0}
-.ld-a-dealer{grid-area:dealer}.ld-a-photos{grid-area:photos}.ld-a-who{grid-area:who}
+.ld-form{display:flex;flex-direction:column;gap:14px;margin-top:14px}
+.ld-col{display:contents}
+.ld-form .ld-card{margin-top:0}
+.ld-a-dealer{order:1}.ld-a-photos{order:2}.ld-a-who{order:3}.ld-a-notes{order:4}
+.ld-a-notes{display:flex;flex-direction:column}
+.ld-a-notes textarea{flex:1;min-height:140px;resize:vertical}
 .ld-send{margin-top:16px;display:flex;flex-direction:column;gap:10px}
 @media(min-width:960px){
   .ld{font-size:16px}
@@ -77,7 +80,9 @@ body{margin:0;background:${C.bg}}
   .ld-main{padding-top:28px}
   .ld-h{font-size:32px}
   .ld-card{padding:24px;border-radius:16px}
-  .ld-form{grid-template-columns:1fr 1fr;gap:20px;grid-template-areas:"dealer photos" "who photos";align-items:start;margin-top:20px}
+  .ld-form{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:stretch;margin-top:20px}
+  .ld-col{display:flex;flex-direction:column;gap:20px}
+  .ld-a-notes{flex:1}
   .ld-send{flex-direction:row;justify-content:flex-end;align-items:center}
   .ld-send .ld-btn.big{width:auto;min-width:320px;padding:17px 28px;font-size:17px}
   .ld-thumbs{grid-template-columns:repeat(5,1fr)!important}
@@ -375,6 +380,7 @@ function NewLead({ token, onAuthFail }) {
   return (
     <>
       <div className="ld-form">
+      <div className="ld-col">
       <div className="ld-card ld-a-dealer">
         <div className="ld-step">1 · Dealership</div>
         <label className="ld-label" htmlFor="dl">Dealership name</label>
@@ -392,6 +398,53 @@ function NewLead({ token, onAuthFail }) {
         )}
       </div>
 
+      <div className="ld-card ld-a-who">
+        <div className="ld-step">3 · Who gets the email</div>
+        <div className="ld-row">
+          <div>
+            <label className="ld-label" htmlFor="cn">Name</label>
+            <input id="cn" className="ld-input" value={f.contactName} onChange={set("contactName")} placeholder="Mike Torres" autoComplete="off" />
+          </div>
+          <div>
+            <label className="ld-label" htmlFor="ct">Title</label>
+            <input id="ct" className="ld-input" value={f.contactTitle} onChange={set("contactTitle")} autoComplete="off" />
+          </div>
+        </div>
+        <label className="ld-label" htmlFor="em">Email</label>
+        <input id="em" className="ld-input" type="email" inputMode="email" autoCapitalize="none" value={f.email} onChange={set("email")} placeholder={f.website ? `gm@${domainOf(f.website)}` : "gm@dealership.com"} autoComplete="off" />
+        {f.website && !f.email.includes("@") && (
+          <button type="button" className="ld-domain" onClick={() => setF(p => ({ ...p, email: `${p.email.trim()}@${domainOf(p.website)}` }))}>
+            {f.email.trim() ? `${f.email.trim()}@${domainOf(f.website)}` : `Add @${domainOf(f.website)}`}
+          </button>
+        )}
+        <label className="ld-label">CC <span style={{ fontWeight: 400, color: C.mute }}>(optional: used car manager, sales manager…)</span></label>
+        {(f.cc || []).map((c, i) => {
+          const setCc = (k, v) => setF(p => ({ ...p, cc: p.cc.map((x, j) => (j === i ? { ...x, [k]: v } : x)) }));
+          const dom = domainOf(f.website);
+          return (
+            <div key={i} className="ld-cc">
+              <button type="button" className="x" aria-label="Remove CC" onClick={() => setF(p => ({ ...p, cc: p.cc.filter((_, j) => j !== i) }))}>×</button>
+              <input className="ld-input" placeholder="Name" value={c.name} onChange={e => setCc("name", e.target.value)} autoComplete="off" />
+              <input className="ld-input" placeholder="Title" list="ld-cc-titles" value={c.title} onChange={e => setCc("title", e.target.value)} autoComplete="off" />
+              <input className="ld-input full" type="email" inputMode="email" autoCapitalize="none" placeholder={dom ? `ucm@${dom}` : "manager@dealership.com"} value={c.email}
+                onChange={e => setCc("email", e.target.value)} autoComplete="off" />
+              {dom && c.email && !c.email.includes("@") && (
+                <button type="button" className="ld-domain full" style={{ justifySelf: "start", marginTop: 0 }} onClick={() => setCc("email", `${c.email.trim()}@${dom}`)}>{c.email.trim()}@{dom}</button>
+              )}
+            </div>
+          );
+        })}
+        <datalist id="ld-cc-titles">{CC_TITLES.map(t => <option key={t} value={t} />)}</datalist>
+        {(f.cc || []).length < 5 && (
+          <button type="button" className="ld-addcc" onClick={() => setF(p => ({ ...p, cc: [...(p.cc || []), { name: "", title: (p.cc || []).length ? "" : "Used Car Manager", email: "" }] }))}>+ Add CC</button>
+        )}
+        <label className={`ld-test${f.testMode ? " on" : ""}`}>
+          <input type="checkbox" checked={!!f.testMode} onChange={e => setF(p => ({ ...p, testMode: e.target.checked }))} />
+          <div><b>Test run</b><span>Sends all 4 emails 1 minute apart so you can see the whole sequence. Use your own email.</span></div>
+        </label>
+      </div>
+      </div>
+      <div className="ld-col">
       <div className="ld-card ld-a-photos">
         <div className="ld-step">2 · Photos & video</div>
         <div className="ld-capture">
@@ -439,52 +492,10 @@ function NewLead({ token, onAuthFail }) {
         )}
       </div>
 
-      <div className="ld-card ld-a-who">
-        <div className="ld-step">3 · Who gets the email</div>
-        <div className="ld-row">
-          <div>
-            <label className="ld-label" htmlFor="cn">Name</label>
-            <input id="cn" className="ld-input" value={f.contactName} onChange={set("contactName")} placeholder="Mike Torres" autoComplete="off" />
-          </div>
-          <div>
-            <label className="ld-label" htmlFor="ct">Title</label>
-            <input id="ct" className="ld-input" value={f.contactTitle} onChange={set("contactTitle")} autoComplete="off" />
-          </div>
-        </div>
-        <label className="ld-label" htmlFor="em">Email</label>
-        <input id="em" className="ld-input" type="email" inputMode="email" autoCapitalize="none" value={f.email} onChange={set("email")} placeholder={f.website ? `gm@${domainOf(f.website)}` : "gm@dealership.com"} autoComplete="off" />
-        {f.website && !f.email.includes("@") && (
-          <button type="button" className="ld-domain" onClick={() => setF(p => ({ ...p, email: `${p.email.trim()}@${domainOf(p.website)}` }))}>
-            {f.email.trim() ? `${f.email.trim()}@${domainOf(f.website)}` : `Add @${domainOf(f.website)}`}
-          </button>
-        )}
-        <label className="ld-label">CC <span style={{ fontWeight: 400, color: C.mute }}>(optional: used car manager, sales manager…)</span></label>
-        {(f.cc || []).map((c, i) => {
-          const setCc = (k, v) => setF(p => ({ ...p, cc: p.cc.map((x, j) => (j === i ? { ...x, [k]: v } : x)) }));
-          const dom = domainOf(f.website);
-          return (
-            <div key={i} className="ld-cc">
-              <button type="button" className="x" aria-label="Remove CC" onClick={() => setF(p => ({ ...p, cc: p.cc.filter((_, j) => j !== i) }))}>×</button>
-              <input className="ld-input" placeholder="Name" value={c.name} onChange={e => setCc("name", e.target.value)} autoComplete="off" />
-              <input className="ld-input" placeholder="Title" list="ld-cc-titles" value={c.title} onChange={e => setCc("title", e.target.value)} autoComplete="off" />
-              <input className="ld-input full" type="email" inputMode="email" autoCapitalize="none" placeholder={dom ? `ucm@${dom}` : "manager@dealership.com"} value={c.email}
-                onChange={e => setCc("email", e.target.value)} autoComplete="off" />
-              {dom && c.email && !c.email.includes("@") && (
-                <button type="button" className="ld-domain full" style={{ justifySelf: "start", marginTop: 0 }} onClick={() => setCc("email", `${c.email.trim()}@${dom}`)}>{c.email.trim()}@{dom}</button>
-              )}
-            </div>
-          );
-        })}
-        <datalist id="ld-cc-titles">{CC_TITLES.map(t => <option key={t} value={t} />)}</datalist>
-        {(f.cc || []).length < 5 && (
-          <button type="button" className="ld-addcc" onClick={() => setF(p => ({ ...p, cc: [...(p.cc || []), { name: "", title: (p.cc || []).length ? "" : "Used Car Manager", email: "" }] }))}>+ Add CC</button>
-        )}
-        <label className="ld-label" htmlFor="nt" style={{ marginTop: 16 }}>Notes (internal, not emailed)</label>
-        <textarea id="nt" className="ld-input" rows={3} value={f.notes} onChange={set("notes")} placeholder="Spoke to the porter, GM is in Tues–Sat…" />
-        <label className={`ld-test${f.testMode ? " on" : ""}`}>
-          <input type="checkbox" checked={!!f.testMode} onChange={e => setF(p => ({ ...p, testMode: e.target.checked }))} />
-          <div><b>Test run</b><span>Sends all 4 emails 1 minute apart so you can see the whole sequence. Use your own email.</span></div>
-        </label>
+      <div className="ld-card ld-a-notes">
+        <div className="ld-step">4 · Notes <span style={{ textTransform: "none", letterSpacing: 0, fontWeight: 500, color: C.mute }}>(internal, not emailed)</span></div>
+        <textarea id="nt" className="ld-input" rows={5} value={f.notes} onChange={set("notes")} placeholder="Spoke to the porter, GM is in Tues–Sat. Lot has ~120 units, front row faces the highway…" />
+      </div>
       </div>
       </div>
 
