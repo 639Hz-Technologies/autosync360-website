@@ -9,6 +9,7 @@
 //   POST /api/leads/places  {input, sessionToken, lat, lng} → Google car-dealer suggestions
 //   POST /api/leads/place   {placeId, sessionToken}    → name, address, website, phone for the picked dealer
 import crypto from "node:crypto";
+import dns from "node:dns/promises";
 import { ISSUES } from "../../src/leads/issues.js";
 import { mailMissing, senderInfo, sendLeadEmail, afterSend } from "../lib/lead-mail.mjs";
 import { renderEmail } from "../lib/lead-emails.mjs";
@@ -20,6 +21,23 @@ import {
 export const config = { path: "/api/leads/*" };
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+// Bounces hurt sender reputation, so catch dead domains and common typos before sending.
+const TYPOS = { "gmial.com": "gmail.com", "gmal.com": "gmail.com", "gmai.com": "gmail.com", "gmail.co": "gmail.com", "gnail.com": "gmail.com",
+  "yaho.com": "yahoo.com", "yahooo.com": "yahoo.com", "hotmial.com": "hotmail.com", "hotmal.com": "hotmail.com",
+  "outlok.com": "outlook.com", "outllook.com": "outlook.com", "iclod.com": "icloud.com", "icloud.co": "icloud.com" };
+async function emailDomainProblem(email) {
+  const domain = email.split("@")[1];
+  if (TYPOS[domain]) return `Did you mean @${TYPOS[domain]}? "${domain}" looks like a typo.`;
+  try {
+    const mx = await dns.resolveMx(domain);
+    if (!mx.some(r => r.exchange && r.exchange !== ".")) return `${domain} doesn't accept email. Double-check the address.`;
+  } catch (err) {
+    if (err.code === "ENOTFOUND" || err.code === "ENODATA") return `${domain} doesn't accept email. Double-check the address.`;
+    // Any other DNS hiccup: don't block the send.
+  }
+  return null;
+}
 const EXT = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/heic": "heic", "video/mp4": "mp4", "video/quicktime": "mov", "video/webm": "webm", "video/x-m4v": "m4v" };
 const clean = (s, max = 300) => String(s ?? "").trim().slice(0, max);
 
@@ -127,6 +145,8 @@ async function send(body) {
   const lead = parseLead(body);
   if (!lead.dealership) return json({ error: "Dealership name is required." }, 400);
   if (!EMAIL.test(lead.contact_email)) return json({ error: "That email address doesn't look right." }, 400);
+  const domainProblem = await emailDomainProblem(lead.contact_email);
+  if (domainProblem) return json({ error: domainProblem }, 400);
   if (!lead.media.length) return json({ error: "Add at least one photo or video." }, 400);
 
   // Never email someone who unsubscribed; don't put the same person in twice (unless you confirm).

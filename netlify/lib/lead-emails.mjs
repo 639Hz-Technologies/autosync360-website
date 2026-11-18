@@ -23,7 +23,7 @@ const EMAILS = [
       `Hi ${v.first},`,
       OPENER,
       `I walked ${v.dealership}${v.street ? ` on ${v.street}` : ""} today and took ${v.hasVideo && v.photoCount ? "photos and a quick video" : v.hasVideo ? "a quick video" : "some photos"} of your inventory. ${issuesSentence(v.issues)}`,
-      { media: 4 },
+      { media: 2 }, // 2 photos keeps a cold email light; the rest are on the lot page
       "These are the cars your customers walk up to, and the same cars in your online listings. Shoppers make up their minds from those photos before they ever call.",
       "We're AutoSync 360, a CSI-driven detailing company that understands what it takes to get vehicles front-line ready. We've been in the industry for over a decade, detailing vehicles at dealerships and recon centers. Our crew speaks English, communicates clearly with your sales and service teams, and uses common sense.",
       OFFER,
