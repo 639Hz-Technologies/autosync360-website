@@ -43,10 +43,67 @@ video{width:100%;border-radius:12px;background:#000;margin-bottom:12px;max-heigh
 .btn{display:inline-flex;align-items:center;gap:8px;padding:13px 22px;border-radius:10px;font-weight:600;font-size:15px;text-decoration:none;background:#2563eb;color:#fff;margin:0 8px 8px 0}
 .btn.g{background:transparent;color:#1e293b;border:1px solid rgba(15,23,42,.15)}
 footer{color:#94a3b8;font-size:13px;padding:0 0 32px}
+.lb{position:fixed;inset:0;z-index:50;background:rgba(5,8,15,.94);display:none;align-items:center;justify-content:center;touch-action:pan-y}
+.lb.open{display:flex}
+.lb img{max-width:calc(100vw - 140px);max-height:calc(100vh - 110px);object-fit:contain;border-radius:8px;user-select:none;-webkit-user-drag:none}
+.lb button{position:absolute;width:52px;height:52px;border-radius:50%;border:0;background:rgba(255,255,255,.16);color:#fff;font:400 30px/52px Inter,sans-serif;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.lb button:hover{background:rgba(255,255,255,.28)}
+.lb button[hidden]{display:none}
+.lb .x{top:16px;right:16px;font-size:28px}
+.lb .prev{left:20px;top:50%;transform:translateY(-50%)}
+.lb .next{right:20px;top:50%;transform:translateY(-50%)}
+.lb .count{position:absolute;bottom:20px;left:0;right:0;text-align:center;color:#cbd5e1;font-size:14px;font-weight:600}
+@media(max-width:700px){.lb img{max-width:100vw;max-height:calc(100vh - 140px);border-radius:0}.lb .prev,.lb .next{top:auto;bottom:56px;transform:none;width:48px;height:48px}.lb .prev{left:16px}.lb .next{right:16px}}
 </style></head><body>
 <header><div class="wrap"><a href="/"><img src="/autosync360-wordmark.png" alt="AutoSync 360"></a><a class="btn g" href="${PHONE_HREF}" style="margin:0">${PHONE}</a></div></header>
 <main class="wrap">${body}</main>
 <footer class="wrap">© ${new Date().getFullYear()} AutoSync 360</footer>
+<div class="lb" role="dialog" aria-modal="true" aria-label="Photo viewer">
+  <img alt="">
+  <button class="x" type="button" aria-label="Close">&times;</button>
+  <button class="prev" type="button" aria-label="Previous photo">&#8249;</button>
+  <button class="next" type="button" aria-label="Next photo">&#8250;</button>
+  <div class="count"></div>
+</div>
+<script>
+(function () {
+  var links = [].slice.call(document.querySelectorAll(".grid a"));
+  var lb = document.querySelector(".lb");
+  if (!links.length || !lb) return;
+  var img = lb.querySelector("img"), prev = lb.querySelector(".prev"), next = lb.querySelector(".next"), count = lb.querySelector(".count");
+  var i = 0;
+  function show(n) {
+    i = Math.max(0, Math.min(links.length - 1, n));
+    img.src = links[i].href;
+    img.alt = (links[i].querySelector("img") || {}).alt || "";
+    prev.hidden = i === 0;
+    next.hidden = i === links.length - 1;
+    count.textContent = links.length > 1 ? (i + 1) + " / " + links.length : "";
+    var ahead = links[i + 1];
+    if (ahead) new Image().src = ahead.href;
+  }
+  function open(n) { show(n); lb.classList.add("open"); document.body.style.overflow = "hidden"; }
+  function close() { lb.classList.remove("open"); document.body.style.overflow = ""; img.removeAttribute("src"); }
+  links.forEach(function (a, n) { a.addEventListener("click", function (e) { e.preventDefault(); open(n); }); });
+  lb.querySelector(".x").addEventListener("click", close);
+  prev.addEventListener("click", function (e) { e.stopPropagation(); show(i - 1); });
+  next.addEventListener("click", function (e) { e.stopPropagation(); show(i + 1); });
+  lb.addEventListener("click", function (e) { if (e.target === lb) close(); });
+  document.addEventListener("keydown", function (e) {
+    if (!lb.classList.contains("open")) return;
+    if (e.key === "Escape") close();
+    else if (e.key === "ArrowLeft") show(i - 1);
+    else if (e.key === "ArrowRight") show(i + 1);
+  });
+  var x0 = null;
+  lb.addEventListener("touchstart", function (e) { x0 = e.touches[0].clientX; }, { passive: true });
+  lb.addEventListener("touchend", function (e) {
+    if (x0 === null) return;
+    var dx = e.changedTouches[0].clientX - x0; x0 = null;
+    if (Math.abs(dx) > 50) show(dx < 0 ? i + 1 : i - 1);
+  });
+})();
+</script>
 </body></html>`, {
   status: 200,
   headers: { "content-type": "text/html; charset=utf-8", "x-robots-tag": "noindex, nofollow, noarchive, noimageindex", "referrer-policy": "no-referrer", "cache-control": "public, max-age=300" },
