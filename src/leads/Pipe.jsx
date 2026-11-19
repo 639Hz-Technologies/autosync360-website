@@ -3,6 +3,7 @@
 // Moving a lead out of "New lead" stops its automatic emails (you're talking to them now).
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { C, AuthError, api } from "./shared.js";
+import { PROFILE_FIELDS } from "./profile.js";
 
 export const STAGES = [
   { key: "new", label: "New lead", color: "#2563eb" },
@@ -57,8 +58,22 @@ const css = `
 .pp-note time{display:block;font-size:12px;color:${C.mute}}
 .pp-note p{white-space:pre-wrap;font-size:14px}
 .pp-tip{color:#94a3b8}
+.pp-tag.arch{background:#e2e8f0;color:#475569}
+.pp-tag.vol{background:rgba(5,150,105,.1);color:#047857}
+.pp-card.archived{opacity:.6}
+.pp-vol{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.pp-vol label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:${C.mute};font-weight:500}
+.pp-vol .ld-input{padding:10px 12px;font-size:15px}
+.pp-vol .wide{grid-column:1 / -1}
+.pp-arch{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:24px;padding-top:16px;border-top:1px solid ${C.line}}
+.pp-arch-banner{background:#f1f5f9;border:1px solid #e2e8f0;border-radius:10px;padding:10px 12px;margin-top:12px;font-size:14px;color:#475569}
+.ld-btn.danger{background:#fff;color:${C.bad};border:1px solid rgba(220,38,38,.35);box-shadow:none}
+@media(max-width:520px){.pp-vol{grid-template-columns:1fr}}
 @media(max-width:700px){.pp-board{grid-auto-columns:82vw}.pp-tip{display:none}}
 `;
+
+// Short summary on the card, e.g. "120 on lot · 80 used/mo"
+const volumeTag = p => [p?.cars_on_lot != null && `${p.cars_on_lot} on lot`, p?.used_per_month != null && `${p.used_per_month} used/mo`].filter(Boolean).join(" · ");
 
 const fmtDate = d => new Date(d).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 const toLocalInput = d => { if (!d) return ""; const x = new Date(d); x.setMinutes(x.getMinutes() - x.getTimezoneOffset()); return x.toISOString().slice(0, 16); };
@@ -70,6 +85,7 @@ export default function Pipe({ token, onAuthFail }) {
   const [dragId, setDragId] = useState(null);
   const [overStage, setOverStage] = useState(null);
   const [hideTests, setHideTests] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
 
   const fail = x => (x instanceof AuthError ? onAuthFail() : setErr(x.message));
   const load = () => api("list", { token }).then(r => setLeads(r.leads)).catch(fail);
@@ -85,7 +101,8 @@ export default function Pipe({ token, onAuthFail }) {
     catch (x) { merge({ id, pipeline_stage: prev.pipeline_stage }); fail(x); }
   };
 
-  const shown = useMemo(() => (leads || []).filter(l => !(hideTests && l.test_mode)), [leads, hideTests]);
+  const shown = useMemo(() => (leads || []).filter(l => !(hideTests && l.test_mode) && (showArchived || !l.archived_at)), [leads, hideTests, showArchived]);
+  const archivedCount = (leads || []).filter(l => l.archived_at).length;
   const byStage = useMemo(() => Object.fromEntries(STAGES.map(s => [s.key, shown.filter(l => (l.pipeline_stage || "new") === s.key)])), [shown]);
   const open = leads?.find(l => l.id === openId);
   const won = byStage.closed_won?.length || 0;
@@ -98,6 +115,9 @@ export default function Pipe({ token, onAuthFail }) {
         <span className="pp-row">
           <label style={{ display: "flex", gap: 6, alignItems: "center", cursor: "pointer" }}>
             <input type="checkbox" checked={hideTests} onChange={e => setHideTests(e.target.checked)} /> Hide test runs
+          </label>
+          <label style={{ display: "flex", gap: 6, alignItems: "center", cursor: "pointer" }}>
+            <input type="checkbox" checked={showArchived} onChange={e => setShowArchived(e.target.checked)} /> Show archived{archivedCount ? ` (${archivedCount})` : ""}
           </label>
           <button className="ld-btn sm g" onClick={() => { setLeads(null); load(); }}>Refresh</button>
         </span>
@@ -113,7 +133,7 @@ export default function Pipe({ token, onAuthFail }) {
             <div className="pp-col-h"><span className="pp-dot" style={{ background: s.color }} />{s.label}<span className="pp-count">{byStage[s.key]?.length || 0}</span></div>
             <div className="pp-list">
               {(byStage[s.key] || []).map(l => (
-                <div key={l.id} role="button" tabIndex={0} className={`pp-card${dragId === l.id ? " dragging" : ""}`} draggable
+                <div key={l.id} role="button" tabIndex={0} className={`pp-card${dragId === l.id ? " dragging" : ""}${l.archived_at ? " archived" : ""}`} draggable
                   onKeyDown={e => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), setOpenId(l.id))}
                   onDragStart={e => { setDragId(l.id); e.dataTransfer.setData("text/plain", l.id); e.dataTransfer.effectAllowed = "move"; }}
                   onDragEnd={() => { setDragId(null); setOverStage(null); }}
@@ -121,7 +141,9 @@ export default function Pipe({ token, onAuthFail }) {
                   <b>{l.dealership}</b>
                   <div className="pp-sub">{l.contact_name ? `${l.contact_name} · ` : ""}{l.contact_email}</div>
                   <div className="pp-tags">
+                    {l.archived_at && <span className="pp-tag arch">Archived</span>}
                     {l.demo_at && <span className="pp-tag demo">Demo {fmtDate(l.demo_at)}</span>}
+                    {volumeTag(l.profile) && <span className="pp-tag vol">{volumeTag(l.profile)}</span>}
                     {(l.notes_log || []).length > 0 && <span className="pp-tag">{l.notes_log.length} note{l.notes_log.length === 1 ? "" : "s"}</span>}
                     <span className="pp-tag">{EMAIL_STATUS[l.status] || l.status}</span>
                     {l.test_mode && <span className="pp-tag test">Test</span>}
@@ -134,7 +156,7 @@ export default function Pipe({ token, onAuthFail }) {
         ))}
       </div>
 
-      {open && <LeadDrawer lead={open} token={token} onClose={() => setOpenId(null)} onMove={move} onSaved={merge} onFail={fail} />}
+      {open && <LeadDrawer lead={open} token={token} onClose={() => setOpenId(null)} onMove={move} onSaved={row => { merge(row); if (row.archived_at && !showArchived) setOpenId(null); }} onFail={fail} />}
     </>
   );
 }
@@ -143,6 +165,8 @@ function LeadDrawer({ lead, token, onClose, onMove, onSaved, onFail }) {
   const [note, setNote] = useState("");
   const [demo, setDemo] = useState(toLocalInput(lead.demo_at));
   const [busy, setBusy] = useState("");
+  const [vol, setVol] = useState(() => Object.fromEntries(PROFILE_FIELDS.map(f => [f.key, lead.profile?.[f.key] ?? ""])));
+  const volDirty = PROFILE_FIELDS.some(f => String(vol[f.key] ?? "") !== String(lead.profile?.[f.key] ?? ""));
 
   useEffect(() => {
     const onKey = e => e.key === "Escape" && onClose();
@@ -168,6 +192,7 @@ function LeadDrawer({ lead, token, onClose, onMove, onSaved, onFail }) {
         <button className="pp-x" onClick={onClose} aria-label="Close">×</button>
         <h2>{lead.dealership}</h2>
         <div className="ld-hint">Added {fmtDate(lead.created_at)}{lead.test_mode ? " · test run" : ""}</div>
+        {lead.archived_at && <div className="pp-arch-banner">Archived {fmtDate(lead.archived_at)}. It's hidden from Pipe and Campaign and gets no emails.</div>}
 
         <div className="pp-sec">
           <h3>Stage</h3>
@@ -185,6 +210,30 @@ function LeadDrawer({ lead, token, onClose, onMove, onSaved, onFail }) {
             {lead.demo_at && <button className="ld-btn sm g" disabled={busy === "demo"} onClick={async () => { if (await save("demo", "demo", { demoAt: null })) setDemo(""); }}>Clear</button>}
           </div>
           {lead.demo_at && <p className="ld-hint">Scheduled for {fmtDate(lead.demo_at)}</p>}
+        </div>
+
+        <div className="pp-sec">
+          <h3>Volume</h3>
+          <div className="pp-vol">
+            {PROFILE_FIELDS.map(f => (
+              <label key={f.key} className={f.type === "select" ? "wide" : ""}>
+                {f.label}
+                {f.type === "select" ? (
+                  <select className="ld-input" value={vol[f.key]} onChange={e => setVol(v => ({ ...v, [f.key]: e.target.value }))}>
+                    <option value="">Not sure yet</option>
+                    {f.options.map(o => <option key={o} value={o}>{o}</option>)}
+                  </select>
+                ) : (
+                  <input className="ld-input" inputMode={f.type === "number" ? "numeric" : undefined} value={vol[f.key]}
+                    placeholder={f.type === "number" ? "0" : f.key === "price_per_detail" ? "$85 full, $25 wash" : ""}
+                    onChange={e => setVol(v => ({ ...v, [f.key]: f.type === "number" ? e.target.value.replace(/[^\d]/g, "") : e.target.value }))} />
+                )}
+              </label>
+            ))}
+          </div>
+          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 10 }}>
+            <button className="ld-btn sm" disabled={!volDirty || busy === "vol"} onClick={() => save("vol", "profile", { profile: vol })}>{busy === "vol" ? "Saving…" : volDirty ? "Save volume" : "Saved"}</button>
+          </div>
         </div>
 
         <div className="pp-sec">
@@ -210,6 +259,13 @@ function LeadDrawer({ lead, token, onClose, onMove, onSaved, onFail }) {
             <span>Lot page</span><a href={lead.report_url} target="_blank" rel="noopener">{lead.media_count} photo{lead.media_count === 1 ? "" : "s"}/videos</a>
             <span>Emails</span><span>{lead.step || 0} of 4 sent · {EMAIL_STATUS[lead.status] || lead.status}</span>
           </div>
+        </div>
+
+        <div className="pp-arch">
+          <span className="ld-hint" style={{ margin: 0 }}>{lead.archived_at ? "Bring it back onto the board." : "Done with this lead? Archive hides it and stops any emails."}</span>
+          {lead.archived_at
+            ? <button className="ld-btn sm g" disabled={busy === "arch"} onClick={() => save("arch", "archive", { archived: false })}>{busy === "arch" ? "Saving…" : "Unarchive"}</button>
+            : <button className="ld-btn sm danger" disabled={busy === "arch"} onClick={() => save("arch", "archive", { archived: true })}>{busy === "arch" ? "Archiving…" : "Archive lead"}</button>}
         </div>
       </aside>
     </div>

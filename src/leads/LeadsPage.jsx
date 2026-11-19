@@ -554,7 +554,10 @@ function NewLead({ token, onAuthFail }) {
 const shortDate = d => new Date(d).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 
 function Campaign({ token, onAuthFail }) {
-  const [leads, setLeads] = useState(null);
+  const [all, setLeads] = useState(null);
+  const [showArchived, setShowArchived] = useState(false);
+  const leads = all && all.filter(l => showArchived || !l.archived_at);
+  const archivedCount = (all || []).filter(l => l.archived_at).length;
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(null);
 
@@ -576,7 +579,14 @@ function Campaign({ token, onAuthFail }) {
     <>
       <div className="ld-toolbar">
         <span>{leads ? `${leads.length} lead${leads.length === 1 ? "" : "s"}` : ""}</span>
-        <button className="ld-btn sm g" onClick={() => { setLeads(null); load(); }}>Refresh</button>
+        <span style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          {archivedCount > 0 && (
+            <label style={{ display: "flex", gap: 6, alignItems: "center", cursor: "pointer" }}>
+              <input type="checkbox" checked={showArchived} onChange={e => setShowArchived(e.target.checked)} /> Show archived ({archivedCount})
+            </label>
+          )}
+          <button className="ld-btn sm g" onClick={() => { setLeads(null); load(); }}>Refresh</button>
+        </span>
       </div>
       {err && <div className="ld-err">{err}</div>}
       <div className="ld-card">
@@ -591,6 +601,7 @@ function Campaign({ token, onAuthFail }) {
                 <div className="ld-hint" style={{ marginTop: 6, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
                   <span className="ld-pill" style={{ background: bg, color: fg }}>{label}</span>
                   {l.test_mode && <span className="ld-pill" style={{ background: "rgba(217,119,6,.12)", color: C.warn }}>Test</span>}
+                  {l.archived_at && <span className="ld-pill" style={{ background: "#e2e8f0", color: "#475569" }}>Archived</span>}
                   <span>{days === 0 ? "today" : `${days}d ago`} · {l.media_count} file{l.media_count === 1 ? "" : "s"}</span>
                   {l.step > 0 && <span>· {l.step} of 4 emails sent{l.status === "active" && l.next_send_at ? ` · next ${l.test_mode ? new Date(l.next_send_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : shortDate(l.next_send_at)}` : ""}</span>}
                   <a className="ld-link" href={l.report_url} target="_blank" rel="noopener">Lot page</a>

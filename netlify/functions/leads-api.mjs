@@ -9,11 +9,14 @@
 //   POST /api/leads/stage   {id, stage}                → move on the Pipe board (leaving "new" stops the emails)
 //   POST /api/leads/note    {id, text}                 → add a note to the lead
 //   POST /api/leads/demo    {id, demoAt}               → set/clear the demo date (moves New/Replied → Demo scheduled)
+//   POST /api/leads/profile {id, profile}              → save the Volume section (used/mo, deliveries, PDIs, lot wash…)
+//   POST /api/leads/archive {id, archived}             → archive (hide + stop emails) or unarchive
 //   POST /api/leads/places  {input, sessionToken, lat, lng} → Google car-dealer suggestions
 //   POST /api/leads/place   {placeId, sessionToken}    → name, address, website, phone for the picked dealer
 import crypto from "node:crypto";
 import dns from "node:dns/promises";
 import { ISSUES } from "../../src/leads/issues.js";
+import { cleanProfile } from "../../src/leads/profile.js";
 import { mailMissing, senderInfo, sendLeadEmail, afterSend } from "../lib/lead-mail.mjs";
 import { renderEmail } from "../lib/lead-emails.mjs";
 import {
@@ -118,7 +121,7 @@ export default async (req) => {
     }
 
     if (route === "list" && req.method === "GET") {
-      const rows = await db.select("select=id,created_at,dealership,address,contact_name,contact_title,contact_email,phone,website,status,media,step,next_send_at,last_sent_at,test_mode,cc,pipeline_stage,stage_changed_at,demo_at,notes,notes_log,issues,issues_other&order=created_at.desc&limit=300");
+      const rows = await db.select("select=id,created_at,dealership,address,contact_name,contact_title,contact_email,phone,website,status,media,step,next_send_at,last_sent_at,test_mode,cc,archived_at,profile,pipeline_stage,stage_changed_at,demo_at,notes,notes_log,issues,issues_other&order=created_at.desc&limit=300");
       return json({ leads: rows.map(r => ({ ...r, report_url: reportUrl(r.id), media_count: (r.media || []).length, media: undefined })) });
     }
 
@@ -146,6 +149,21 @@ export default async (req) => {
       const row = await getLead(id);
       if (!row) return json({ error: "Lead not found" }, 404);
       return json({ lead: await db.update(id, { notes_log: [...(row.notes_log || []), { at: now(), text: t }] }) });
+    }
+
+    if (route === "profile" && req.method === "POST") {
+      const { id, profile } = await req.json();
+      if (!(await getLead(id))) return json({ error: "Lead not found" }, 404);
+      return json({ lead: await db.update(id, { profile: cleanProfile(profile) }) });
+    }
+
+    if (route === "archive" && req.method === "POST") {
+      const { id, archived } = await req.json();
+      const row = await getLead(id);
+      if (!row) return json({ error: "Lead not found" }, 404);
+      const patch = { archived_at: archived ? now() : null, history: [...(row.history || []), { at: now(), event: archived ? "archived" : "unarchived" }] };
+      if (archived && row.status === "active") Object.assign(patch, { status: "stopped", next_send_at: null }); // archived leads get no more emails
+      return json({ lead: await db.update(id, patch) });
     }
 
     if (route === "demo" && req.method === "POST") {
