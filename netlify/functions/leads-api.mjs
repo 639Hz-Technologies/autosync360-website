@@ -9,6 +9,7 @@
 //   POST /api/leads/stage   {id, stage}                → move on the Pipe board (leaving "new" stops the emails)
 //   POST /api/leads/note    {id, text}                 → add a note to the lead
 //   POST /api/leads/demo    {id, demoAt}               → set/clear the demo date (moves New/Replied → Demo scheduled)
+//   POST /api/leads/media   {id, add?[], remove?[]}     → add/remove photos & videos on a lead's lot page; returns the list
 //   POST /api/leads/profile {id, profile}              → save the Volume section (used/mo, deliveries, PDIs, lot wash…)
 //   POST /api/leads/archive {id, archived}             → archive (hide + stop emails) or unarchive
 //   GET  /api/leads/data?q=&city=&sort=&lat=&lng=&offset=  → Florida dealerships from Genius Leads ("Data" tab)
@@ -164,6 +165,23 @@ export default async (req) => {
     if (route === "data-cities" && req.method === "GET") {
       if (!directoryEnabled()) return json({ disabled: true, cities: [] });
       return json({ cities: await dealerCities() });
+    }
+
+    if (route === "media" && req.method === "POST") {
+      const { id, add, remove } = await req.json();
+      if (!/^[0-9a-f-]{36}$/.test(String(id))) return json({ error: "Lead not found" }, 404);
+      const [row] = await db.select(`select=id,media&id=eq.${id}&limit=1`);
+      if (!row) return json({ error: "Lead not found" }, 404);
+      let media = row.media || [];
+      const drop = new Set((Array.isArray(remove) ? remove : []).map(String));
+      const adds = (Array.isArray(add) ? add : [])
+        .filter(m => MEDIA_PATH.test(m?.path || "") && !media.some(x => x.path === m.path))
+        .map(m => ({ path: m.path, type: m.type === "video" ? "video" : "image" }));
+      if (drop.size || adds.length) {
+        media = [...media.filter(m => !drop.has(m.path)), ...adds].slice(0, 40);
+        await db.update(id, { media });
+      }
+      return json({ media: media.map(m => ({ ...m, url: mediaUrl(m.path) })), media_count: media.length });
     }
 
     if (route === "profile" && req.method === "POST") {

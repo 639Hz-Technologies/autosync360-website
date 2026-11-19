@@ -106,7 +106,7 @@ footer{color:#94a3b8;font-size:13px;padding:0 0 32px}
 </script>
 </body></html>`, {
   status: 200,
-  headers: { "content-type": "text/html; charset=utf-8", "x-robots-tag": "noindex, nofollow, noarchive, noimageindex", "referrer-policy": "no-referrer", "cache-control": "public, max-age=300" },
+  headers: { "content-type": "text/html; charset=utf-8", "x-robots-tag": "noindex, nofollow, noarchive, noimageindex", "referrer-policy": "no-referrer", "cache-control": "public, max-age=60" },
 });
 
 export default async (req, context) => {

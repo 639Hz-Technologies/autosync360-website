@@ -4,6 +4,7 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { C, AuthError, api } from "./shared.js";
 import { PROFILE_FIELDS, PROFILE_KEYS, fmtMoney, monthlyRevenue } from "./profile.js";
+import LeadMedia from "./LeadMedia.jsx";
 
 export const STAGES = [
   { key: "new", label: "New lead", color: "#2563eb" },
@@ -104,7 +105,7 @@ export default function Pipe({ token, onAuthFail }) {
   const load = () => api("list", { token }).then(r => setLeads(r.leads)).catch(fail);
   useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const merge = row => setLeads(ls => ls.map(l => (l.id === row.id ? { ...l, ...row, report_url: l.report_url, media_count: l.media_count } : l)));
+  const merge = row => setLeads(ls => ls.map(l => (l.id === row.id ? { ...l, ...row, media: undefined, report_url: l.report_url, media_count: row.media_count ?? l.media_count } : l)));
 
   const move = async (id, stage) => {
     const prev = leads.find(l => l.id === id);
@@ -227,6 +228,11 @@ function LeadDrawer({ lead, token, onClose, onMove, onSaved, onFail }) {
             <span>Lot page</span><a href={lead.report_url} target="_blank" rel="noopener">{lead.media_count} photo{lead.media_count === 1 ? "" : "s"}/videos</a>
             <span>Emails</span><span>{lead.step || 0} of 4 sent · {EMAIL_STATUS[lead.status] || lead.status}</span>
           </div>
+        </div>
+
+        <div className="pp-sec">
+          <h3>Photos & videos</h3>
+          <LeadMedia lead={lead} token={token} onAuthFail={() => onFail(new AuthError())} onChange={count => onSaved({ id: lead.id, media_count: count })} />
         </div>
 
         <div className="pp-sec">

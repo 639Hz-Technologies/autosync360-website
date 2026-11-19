@@ -7,71 +7,11 @@ import { ISSUES } from "./issues.js";
 import Pipe from "./Pipe.jsx";
 import Data from "./Data.jsx";
 import { C, store, AuthError, api } from "./shared.js";
+import { compressImage, guessType, putWithProgress, checkVideos, MAX_VIDEO_SECONDS } from "./media.js";
+import LeadMedia from "./LeadMedia.jsx";
 
 const TOKEN_KEY = "as360_leads_token";
 const DRAFT_KEY = "as360_leads_draft";
-
-// Shrink phone photos (often 4–8 MB) to ~300 KB so uploads are quick on cell service.
-async function compressImage(file, maxEdge = 1600) {
-  try {
-    const bmp = await createImageBitmap(file);
-    const s = Math.min(1, maxEdge / Math.max(bmp.width, bmp.height));
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.round(bmp.width * s);
-    canvas.height = Math.round(bmp.height * s);
-    canvas.getContext("2d").drawImage(bmp, 0, 0, canvas.width, canvas.height);
-    const blob = await new Promise(r => canvas.toBlob(r, "image/jpeg", 0.8));
-    return blob || file;
-  } catch {
-    return file; // browser can't decode it (e.g. HEIC on desktop Chrome): upload the original
-  }
-}
-
-// Videos must be 15 seconds or less. They upload as-is (not shrunk), so there's also a file-size cap:
-// Supabase Storage's global per-file limit (Storage → Settings), which stays at 50 MB while the
-// project's spend cap is on. Keep MAX_UPLOAD_MB in step with that setting.
-const MAX_VIDEO_SECONDS = 15;
-const MAX_UPLOAD_MB = 50;
-const tooLongMessage = s => `That video is ${Math.round(s)} seconds. Videos need to be ${MAX_VIDEO_SECONDS} seconds or less. Trim it in Photos (tap Edit and drag the ends) or record a shorter clip.`;
-const tooBigMessage = mb => `That video is ${mb ? `${Math.round(mb)} MB` : "too big"}, over the ${MAX_UPLOAD_MB} MB limit. It was probably recorded in 4K. Switch the camera to 1080p (iPhone: Settings → Camera → Record Video → 1080p HD at 30 fps) and record it again.`;
-
-// Length of a video file in seconds, read from its metadata. null if the browser can't tell (then we let it through).
-function videoSeconds(file) {
-  return new Promise(resolve => {
-    const v = document.createElement("video");
-    const url = URL.createObjectURL(file);
-    const done = s => { clearTimeout(timer); URL.revokeObjectURL(url); v.removeAttribute("src"); resolve(s); };
-    const timer = setTimeout(() => done(null), 8000);
-    v.preload = "metadata";
-    v.muted = true;
-    v.onloadedmetadata = () => done(Number.isFinite(v.duration) ? v.duration : null);
-    v.onerror = () => done(null);
-    v.src = url;
-  });
-}
-
-function guessType(file) {
-  if (file.type) return file.type;
-  const ext = (file.name.split(".").pop() || "").toLowerCase();
-  return { mov: "video/quicktime", mp4: "video/mp4", m4v: "video/x-m4v", webm: "video/webm", heic: "image/heic", jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png" }[ext] || "";
-}
-
-function putWithProgress(url, blob, type, onProgress) {
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open("PUT", url);
-    xhr.setRequestHeader("content-type", type);
-    xhr.setRequestHeader("x-upsert", "false");
-    xhr.upload.onprogress = e => e.lengthComputable && onProgress(e.loaded / e.total);
-    xhr.onload = () => {
-      if (xhr.status < 300) return resolve();
-      if (xhr.status === 413 || /maximum allowed size|too large/i.test(xhr.responseText)) return reject(new Error(tooBigMessage(blob.size / 1048576)));
-      reject(new Error(`Upload failed (${xhr.status}) ${xhr.responseText.slice(0, 120)}`));
-    };
-    xhr.onerror = () => reject(new Error("Upload failed: check your connection"));
-    xhr.send(blob);
-  });
-}
 
 const css = `
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@600;700&display=swap');
@@ -364,14 +304,8 @@ function NewLead({ token, onAuthFail }) {
     let files = [...fileList];
     // Videos: 15 seconds max, and under the storage size cap (they aren't shrunk before upload).
     if (kind === "video") {
-      setErr("");
-      const ok = [];
-      for (const file of files) {
-        const s = await videoSeconds(file);
-        if (s !== null && s > MAX_VIDEO_SECONDS + 0.5) setErr(tooLongMessage(s));
-        else if (file.size > MAX_UPLOAD_MB * 1048576) setErr(tooBigMessage(file.size / 1048576));
-        else ok.push(file);
-      }
+      const { ok, error } = await checkVideos(files);
+      setErr(error);
       files = ok;
       if (!files.length) return;
     }
@@ -599,6 +533,7 @@ function Campaign({ token, onAuthFail }) {
   const archivedCount = (all || []).filter(l => l.archived_at).length;
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(null);
+  const [mediaFor, setMediaFor] = useState(null);
 
   const load = () => api("list", { token }).then(r => setLeads(r.leads)).catch(x => (x instanceof AuthError ? onAuthFail() : setErr(x.message)));
   useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -644,6 +579,7 @@ function Campaign({ token, onAuthFail }) {
                   <span>{days === 0 ? "today" : `${days}d ago`} · {l.media_count} file{l.media_count === 1 ? "" : "s"}</span>
                   {l.step > 0 && <span>· {l.step} of 4 emails sent{l.status === "active" && l.next_send_at ? ` · next ${l.test_mode ? new Date(l.next_send_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : shortDate(l.next_send_at)}` : ""}</span>}
                   <a className="ld-link" href={l.report_url} target="_blank" rel="noopener">Lot page</a>
+                  <button type="button" className="ld-link" style={{ background: "none", border: 0, padding: 0, cursor: "pointer", font: "inherit" }} onClick={() => setMediaFor(l)}>Add photos/videos</button>
                 </div>
               </div>
               <div className="ld-lead-actions" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -656,6 +592,16 @@ function Campaign({ token, onAuthFail }) {
           );
         })}
       </div>
+      {mediaFor && (
+        <div className="lm-modal-bg" onClick={() => setMediaFor(null)}>
+          <div className="lm-modal" role="dialog" aria-modal="true" aria-label={`Photos & videos for ${mediaFor.dealership}`} onClick={e => e.stopPropagation()}>
+            <button className="lm-x" onClick={() => setMediaFor(null)} aria-label="Close">×</button>
+            <h2>{mediaFor.dealership}</h2>
+            <LeadMedia lead={mediaFor} token={token} onAuthFail={onAuthFail}
+              onChange={count => setLeads(ls => ls.map(x => (x.id === mediaFor.id ? { ...x, media_count: count } : x)))} />
+          </div>
+        </div>
+      )}
     </>
   );
 }
