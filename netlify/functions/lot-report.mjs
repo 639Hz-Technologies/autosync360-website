@@ -42,6 +42,18 @@ video{width:100%;border-radius:12px;background:#000;margin-bottom:12px;max-heigh
 .cta.end h3{font:700 20px 'Space Grotesk',sans-serif;color:#0b1220}
 .direct{margin:0 0 18px;color:#0b1220;font-weight:500}
 .direct a{color:#2563eb;font-weight:700;text-decoration:none;white-space:nowrap}
+.top{padding:22px 0 14px}
+.top h1{font-size:clamp(24px,3.2vw,32px)}
+.note{margin-top:8px;max-width:820px;color:#334155;font-size:16px;line-height:1.6}
+.note a{color:#2563eb;font-weight:700;text-decoration:none;white-space:nowrap}
+.top .btns{margin-top:12px}
+.top .btn{padding:10px 18px;font-size:14px}
+header .btn{white-space:nowrap}
+@media(max-width:520px){header .btn{padding:8px 12px;font-size:13px}.top .btn{padding:9px 13px;font-size:13px;margin-right:6px}.note{font-size:15px}}
+.strip{list-style:none;display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:0 0 18px}
+@media(min-width:900px){.strip{grid-template-columns:repeat(4,1fr)}}
+.strip li{display:flex;align-items:center;gap:8px;background:#fff;border:1px solid rgba(15,23,42,.08);border-radius:10px;padding:8px 10px;font-size:13px;font-weight:600;color:#0b1220;line-height:1.3}
+.strip .ic{flex:none;width:26px;height:26px;border-radius:8px;background:rgba(37,99,235,.1);color:#2563eb;display:flex;align-items:center;justify-content:center}
 .media-h{font:700 20px 'Space Grotesk',sans-serif;color:#0b1220;margin:0 0 12px}
 .btn{display:inline-flex;align-items:center;gap:8px;padding:13px 22px;border-radius:10px;font-weight:600;font-size:15px;text-decoration:none;background:#2563eb;color:#fff;margin:0 8px 8px 0}
 .btn.g{background:transparent;color:#1e293b;border:1px solid rgba(15,23,42,.15)}
@@ -122,7 +134,7 @@ export default async (req, context) => {
 
   let lead;
   try {
-    [lead] = await db.select(`select=id,created_at,dealership,media&id=eq.${id}&limit=1`);
+    [lead] = await db.select(`select=id,created_at,dealership,contact_name,media&id=eq.${id}&limit=1`);
   } catch (err) {
     console.error("lot-report:", err);
   }
@@ -132,26 +144,24 @@ export default async (req, context) => {
   const media = lead.media || [];
   const videos = media.filter(m => m.type === "video");
   const photos = media.filter(m => m.type !== "video");
+  const first = (lead.contact_name || "").trim().split(/\s+/)[0] || "there";
+  const nPhotos = photos.length ? `${photos.length} photo${photos.length === 1 ? "" : "s"}` : "";
+  const nVideos = videos.length ? (videos.length === 1 ? "a quick video" : `${videos.length} videos`) : "";
+  const took = [nPhotos, nVideos].filter(Boolean).join(" and ") || "photos";
 
   return page(`${lead.dealership} lot photos | AutoSync 360`, `
-    <section class="intro">
-      <div class="eyebrow">Lot visit · ${esc(date)}</div>
+    <section class="top">
       <h1>${esc(lead.dealership)}</h1>
-      <p>${photos.length ? `${photos.length} photo${photos.length === 1 ? "" : "s"}` : ""}${photos.length && videos.length ? " and " : ""}${videos.length ? `${videos.length === 1 ? "a video" : `${videos.length} videos`}` : ""} of your inventory, taken on our visit.</p>
+      <p class="note">Hi ${esc(first)}, I stopped by ${esc(lead.dealership)} on ${esc(date)} and took ${esc(took)} of your inventory. I'd love to come by, show you a quick demo, and detail one of your vehicles for $1. That $1 also sets us up in your system as a paid vendor, so switching later is easy. You can call me directly at <a href="${DIRECT_HREF}">${DIRECT}</a>, and I'll get something on the calendar so we can swing by.</p>
+      <div class="btns"><a class="btn" href="${DIRECT_HREF}">Call ${DIRECT}</a><a class="btn g" href="/#demo">Learn about AutoSync 360</a></div>
     </section>
-    <section class="cta">
-      <h2>Your dirtiest vehicle, detailed for $1.</h2>
-      <p class="lead">AutoSync 360 is a CSI-driven detailing company with over a decade at dealerships and recon centers. Pick the worst car on your lot and we'll detail it for $1. That also gets us set up in your system as a paid vendor, so switching later is easy.</p>
-      <ul class="points">
-        <li><span class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg></span><div><b>Built around your CSI score</b><span>Every car a customer touches is spotless, so your CSI and survey scores reflect it.</span></div></li>
-        <li><span class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span><div><b>Front-line ready, on time</b><span>Inventory detailed and on the line when you need it, not days later. No more cars sitting in recon.</span></div></li>
-        <li><span class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 17h-2v-6l2-5h9l4 5h3v6h-2"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/></svg></span><div><b>Deliveries handled</b><span>We prep sold units for delivery so every customer drives off in a car that looks brand new.</span></div></li>
-        <li><span class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span><div><b>Your pet peeves, done every time</b><span>Tell us once how you want it: tires, glass, jambs, decals, whatever bugs you. It's done that way on every car, and you never have to repeat yourself.</span></div></li>
-      </ul>
-      <p class="direct">You can also call me directly at <a href="${DIRECT_HREF}">${DIRECT}</a>, and I'll get something on the calendar so we can swing by.</p>
-      <a class="btn" href="${PHONE_HREF}">Call ${PHONE}</a><a class="btn g" href="/#demo">Learn about AutoSync 360</a>
-    </section>
-    <h2 class="media-h">Photos from your lot</h2>
+    <ul class="strip">
+      <li><span class="ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg></span>Built around your CSI score</li>
+      <li><span class="ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>Front-line ready, on time</li>
+      <li><span class="ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 17h-2v-6l2-5h9l4 5h3v6h-2"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/></svg></span>Deliveries handled</li>
+      <li><span class="ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>Your pet peeves, done every time</li>
+    </ul>
+    <h2 class="media-h">${videos.length ? "Video and photos from your lot" : "Photos from your lot"}</h2>
     ${videos.map(v => `<video controls playsinline preload="metadata" src="${esc(mediaUrl(v.path))}"></video>`).join("")}
     <div class="grid">${photos.map(p => `<a href="${esc(mediaUrl(p.path))}" target="_blank" rel="noopener"><img loading="lazy" src="${esc(mediaUrl(p.path))}" alt="Vehicle on the ${esc(lead.dealership)} lot"></a>`).join("")}</div>
     <section class="cta end">
