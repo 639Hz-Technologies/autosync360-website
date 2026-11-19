@@ -216,6 +216,20 @@ function LeadDrawer({ lead, token, onClose, onMove, onSaved, onFail }) {
         {lead.archived_at && <div className="pp-arch-banner">Archived {fmtDate(lead.archived_at)}. It's hidden from Pipe and Campaign and gets no emails.</div>}
 
         <div className="pp-sec">
+          <h3>Contact</h3>
+          <div className="pp-kv">
+            {lead.contact_name && <><span>Name</span><span>{lead.contact_name}{lead.contact_title ? `, ${lead.contact_title}` : ""}</span></>}
+            <span>Email</span><a href={`mailto:${lead.contact_email}`}>{lead.contact_email}</a>
+            {(lead.cc || []).map(c => <Fragment key={c.email}><span>CC</span><a href={`mailto:${c.email}`}>{c.name ? `${c.name}${c.title ? `, ${c.title}` : ""} · ` : ""}{c.email}</a></Fragment>)}
+            {lead.phone && <><span>Phone</span><a href={`tel:${lead.phone.replace(/[^\d+]/g, "")}`}>{lead.phone}</a></>}
+            {lead.website && <><span>Website</span><a href={lead.website} target="_blank" rel="noopener">{lead.website.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "")}</a></>}
+            {lead.address && <><span>Address</span><a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${lead.dealership} ${lead.address}`)}`} target="_blank" rel="noopener">{lead.address}</a></>}
+            <span>Lot page</span><a href={lead.report_url} target="_blank" rel="noopener">{lead.media_count} photo{lead.media_count === 1 ? "" : "s"}/videos</a>
+            <span>Emails</span><span>{lead.step || 0} of 4 sent · {EMAIL_STATUS[lead.status] || lead.status}</span>
+          </div>
+        </div>
+
+        <div className="pp-sec">
           <h3>Stage</h3>
           <select className="ld-input" value={lead.pipeline_stage || "new"} onChange={e => onMove(lead.id, e.target.value)}>
             {STAGES.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
@@ -300,20 +314,6 @@ function LeadDrawer({ lead, token, onClose, onMove, onSaved, onFail }) {
           {notes.map((n, i) => <div key={i} className="pp-note"><time>{fmtDate(n.at)}</time><p>{n.text}</p></div>)}
           {lead.notes && <div className="pp-note"><time>From the lot visit</time><p>{lead.notes}</p></div>}
           {!notes.length && !lead.notes && <p className="ld-hint">No notes yet.</p>}
-        </div>
-
-        <div className="pp-sec">
-          <h3>Contact</h3>
-          <div className="pp-kv">
-            {lead.contact_name && <><span>Name</span><span>{lead.contact_name}{lead.contact_title ? `, ${lead.contact_title}` : ""}</span></>}
-            <span>Email</span><a href={`mailto:${lead.contact_email}`}>{lead.contact_email}</a>
-            {(lead.cc || []).map(c => <Fragment key={c.email}><span>CC</span><a href={`mailto:${c.email}`}>{c.name ? `${c.name}${c.title ? `, ${c.title}` : ""} · ` : ""}{c.email}</a></Fragment>)}
-            {lead.phone && <><span>Phone</span><a href={`tel:${lead.phone.replace(/[^\d+]/g, "")}`}>{lead.phone}</a></>}
-            {lead.website && <><span>Website</span><a href={lead.website} target="_blank" rel="noopener">{lead.website.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "")}</a></>}
-            {lead.address && <><span>Address</span><a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${lead.dealership} ${lead.address}`)}`} target="_blank" rel="noopener">{lead.address}</a></>}
-            <span>Lot page</span><a href={lead.report_url} target="_blank" rel="noopener">{lead.media_count} photo{lead.media_count === 1 ? "" : "s"}/videos</a>
-            <span>Emails</span><span>{lead.step || 0} of 4 sent · {EMAIL_STATUS[lead.status] || lead.status}</span>
-          </div>
         </div>
 
         <div className="pp-arch">
