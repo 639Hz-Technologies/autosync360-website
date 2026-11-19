@@ -29,6 +29,9 @@ const css = `
 .pp-col.over{border-color:${C.accent};background:#e6eefc}
 .pp-col-h{display:flex;align-items:center;gap:8px;padding:12px 12px 8px;font:700 13px Inter,sans-serif;color:${C.ink};text-transform:uppercase;letter-spacing:.05em}
 .pp-dot{width:9px;height:9px;border-radius:50%;flex:none}
+.pp-col-rev{margin-left:auto;font-size:12px;font-weight:700;color:#047857;background:rgba(5,150,105,.1);border-radius:999px;padding:1px 8px;letter-spacing:0;text-transform:none;white-space:nowrap}
+.pp-col-rev+.pp-count{margin-left:0}
+.pp-card-rev{margin-top:8px;text-align:right;font-size:13px;font-weight:700;color:#047857}
 .pp-count{margin-left:auto;background:#fff;border-radius:999px;padding:1px 8px;font-size:12px;color:${C.mute}}
 .pp-list{display:flex;flex-direction:column;gap:8px;padding:4px 8px 12px;flex:1}
 .pp-card{background:#fff;border:1px solid ${C.line};border-radius:12px;padding:12px;cursor:pointer;box-shadow:0 1px 2px rgba(15,23,42,.04);text-align:left;font:inherit;color:inherit;width:100%}
@@ -84,6 +87,10 @@ const css = `
 `;
 
 // Short summary on the card, e.g. "120 on lot · 80 used/mo"
+// Yearly revenue from a lead's Volume section (monthly total × 12).
+const yearly = p => Math.round(monthlyRevenue(p || {}).total * 12 * 100) / 100;
+const fmtShort = n => (n >= 1e6 ? `$${(n / 1e6).toFixed(n >= 1e7 ? 0 : 1).replace(/\.0$/, "")}M` : n >= 1000 ? `$${(n / 1000).toFixed(n >= 1e5 ? 0 : 1).replace(/\.0$/, "")}k` : `$${Math.round(n)}`);
+
 const volumeTag = p => [
   p?.cars_on_lot != null && `${p.cars_on_lot} on lot`,
   p?.used_per_month != null && `${p.used_per_month} used/mo${p.used_price != null ? ` @ ${fmtMoney(p.used_price)}` : ""}`,
@@ -144,7 +151,7 @@ export default function Pipe({ token, onAuthFail }) {
             onDragOver={e => { e.preventDefault(); setOverStage(s.key); }}
             onDragLeave={() => setOverStage(o => (o === s.key ? null : o))}
             onDrop={e => { e.preventDefault(); setOverStage(null); const id = e.dataTransfer.getData("text/plain") || dragId; if (id) move(id, s.key); }}>
-            <div className="pp-col-h"><span className="pp-dot" style={{ background: s.color }} />{s.label}<span className="pp-count">{byStage[s.key]?.length || 0}</span></div>
+            <div className="pp-col-h"><span className="pp-dot" style={{ background: s.color }} />{s.label}<span className="pp-col-rev" title="Yearly revenue of the leads in this column">{fmtShort((byStage[s.key] || []).reduce((sum, l) => sum + yearly(l.profile), 0))}/yr</span><span className="pp-count">{byStage[s.key]?.length || 0}</span></div>
             <div className="pp-list">
               {(byStage[s.key] || []).map(l => (
                 <div key={l.id} role="button" tabIndex={0} className={`pp-card${dragId === l.id ? " dragging" : ""}${l.archived_at ? " archived" : ""}`} draggable
@@ -162,6 +169,7 @@ export default function Pipe({ token, onAuthFail }) {
                     <span className="pp-tag">{EMAIL_STATUS[l.status] || l.status}</span>
                     {l.test_mode && <span className="pp-tag test">Test</span>}
                   </div>
+                  {yearly(l.profile) > 0 && <div className="pp-card-rev">{fmtMoney(yearly(l.profile))}/yr</div>}
                 </div>
               ))}
               {leads && !(byStage[s.key] || []).length && <div className="pp-empty">Drop leads here</div>}
