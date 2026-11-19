@@ -1,24 +1,13 @@
-// "Data" tab on /leads: Florida dealerships from the Genius Leads database (read-only, live).
-//   GENIUS_LEADS_URL               https://ejtfdjihsfybtnonjaru.supabase.co ("genius-leads" project)
-//   GENIUS_LEADS_SERVICE_ROLE_KEY  that project's service_role key (server only)
-import { db } from "./leads.mjs";
+// "Data" tab on /leads: Florida dealerships, copied from the Genius Leads database into AutoSync's
+// own dealer_directory table (Supabase "Auto Sync App"). To refresh it, re-run the copy (see LEADS-SETUP.md).
+import { db, sbRead } from "./leads.mjs";
 
-const env = k => process.env[k] || "";
-export const directoryEnabled = () => !!(env("GENIUS_LEADS_URL") && env("GENIUS_LEADS_SERVICE_ROLE_KEY"));
+export const directoryEnabled = () => true;
 
-const FIELDS = "id,place_id,name,address,city,zip,phone,website,rating,rating_count,lat,lng,socials";
-const BASE = "category=eq.dealership&state=in.(FL,Florida,FLORIDA)";
+const FIELDS = "id:place_id,place_id,name,address,city,zip,phone,website,rating,rating_count,lat,lng,socials";
 const PAGE = 50;
 
-async function gl(path, headers = {}) {
-  const key = env("GENIUS_LEADS_SERVICE_ROLE_KEY");
-  const res = await fetch(`${env("GENIUS_LEADS_URL").replace(/\/$/, "")}/rest/v1/${path}`, {
-    headers: { apikey: key, authorization: `Bearer ${key}`, ...headers },
-  });
-  const text = await res.text();
-  if (!res.ok) throw new Error(`Genius Leads ${res.status}: ${text.slice(0, 200)}`);
-  return { data: text ? JSON.parse(text) : [], range: res.headers.get("content-range") };
-}
+const gl = path => sbRead("dealer_directory", path);
 
 // Search text goes inside a PostgREST or=() filter: keep it to plain characters.
 const safe = q => String(q || "").replace(/[^\p{L}\p{N}\s.'&-]/gu, " ").replace(/\s+/g, " ").trim().slice(0, 60);
@@ -32,7 +21,7 @@ function miles(a, b) {
 
 /** { q, city, sort: "reviews"|"az"|"near", lat, lng, offset } → { total, dealers[] } */
 export async function searchDealers({ q, city, sort = "reviews", lat, lng, offset = 0 }) {
-  const f = [BASE];
+  const f = [];
   const s = safe(q);
   if (s) f.push(`or=(name.ilike.*${encodeURIComponent(s)}*,city.ilike.*${encodeURIComponent(s)}*,address.ilike.*${encodeURIComponent(s)}*)`);
   if (city) f.push(`city=eq.${encodeURIComponent(String(city).slice(0, 60))}`);
@@ -43,14 +32,14 @@ export async function searchDealers({ q, city, sort = "reviews", lat, lng, offse
   if (sort === "near" && here) {
     // Nearest: grab everything within ~70 miles, then sort by distance here.
     f.push(`lat=gte.${here.lat - 1}`, `lat=lte.${here.lat + 1}`, `lng=gte.${here.lng - 1.1}`, `lng=lte.${here.lng + 1.1}`);
-    const { data } = await gl(`prospects?select=${FIELDS}&${f.join("&")}&limit=3000`);
+    const { data } = await gl(`select=${FIELDS}&${f.join("&")}&limit=3000`);
     const sorted = data.map(d => ({ ...d, miles: miles(here, d) })).sort((a, b) => a.miles - b.miles);
     total = sorted.length;
     dealers = sorted.slice(off, off + PAGE);
   } else {
     const order = sort === "az" ? "name.asc" : "rating_count.desc.nullslast,name.asc";
-    const { data, range } = await gl(`prospects?select=${FIELDS}&${f.join("&")}&order=${order}&offset=${off}&limit=${PAGE}`, { prefer: "count=exact" });
-    total = Number((range || "").split("/")[1]) || data.length;
+    const { data, total: t } = await gl(`select=${FIELDS}${f.length ? `&${f.join("&")}` : ""}&order=${order}&offset=${off}&limit=${PAGE}`);
+    total = t || data.length;
     dealers = here ? data.map(d => ({ ...d, miles: miles(here, d) })) : data;
   }
 
@@ -68,7 +57,7 @@ let citiesCache = null;
 /** All Florida cities with dealerships, with counts (cached per function instance). */
 export async function dealerCities() {
   if (citiesCache && Date.now() - citiesCache.at < 6 * 3600e3) return citiesCache.list;
-  const { data } = await gl(`prospects?select=city&${BASE}&limit=10000`);
+  const { data } = await gl(`select=city&limit=10000`);
   const counts = {};
   for (const { city } of data) if (city) counts[city] = (counts[city] || 0) + 1;
   const list = Object.entries(counts).map(([city, n]) => ({ city, n })).sort((a, b) => a.city.localeCompare(b.city));

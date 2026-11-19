@@ -70,6 +70,16 @@ async function sbFetch(path, init = {}) {
   return data;
 }
 
+// Read any table, with the total row count (for paging). Used by the Data tab (dealer_directory).
+export async function sbRead(table, query) {
+  const base = env("SUPABASE_URL").replace(/\/$/, "");
+  const key = env("SUPABASE_SERVICE_ROLE_KEY");
+  const res = await fetch(`${base}/rest/v1/${table}?${query}`, { headers: { apikey: key, authorization: `Bearer ${key}`, prefer: "count=exact" } });
+  const text = await res.text();
+  if (!res.ok) throw new Error(`Supabase ${res.status}: ${text.slice(0, 200)}`);
+  return { data: text ? JSON.parse(text) : [], total: Number((res.headers.get("content-range") || "").split("/")[1]) };
+}
+
 export const db = {
   select: query => sbFetch(`/rest/v1/lead_prospects?${query}`),
   insert: row => sbFetch(`/rest/v1/lead_prospects`, { method: "POST", headers: { prefer: "return=representation" }, body: JSON.stringify(row) }).then(r => r[0]),

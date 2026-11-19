@@ -83,8 +83,8 @@ export default function Data({ token, onAuthFail, onStartLead }) {
       <style>{css}</style>
       {res?.disabled ? (
         <div className="ld-card">
-          <b style={{ color: C.ink }}>Connect Genius Leads to see the Florida dealerships.</b>
-          <p className="ld-hint">Add <code>GENIUS_LEADS_SERVICE_ROLE_KEY</code> in Netlify (Supabase → genius-leads → Project Settings → API keys → service_role), then redeploy.</p>
+          <b style={{ color: C.ink }}>Dealer data isn't available right now.</b>
+          <p className="ld-hint">Try Refresh in a minute.</p>
         </div>
       ) : (
         <>

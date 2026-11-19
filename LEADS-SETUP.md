@@ -49,3 +49,10 @@ Redeploy after changing variables.
   contact form is affected too. To keep them apart, create a second Postmark server for /leads and put its token in
   `LEADS_POSTMARK_TOKEN`.
 - **Video size:** the Supabase free plan caps one file at 50 MB (about 30–45 s of iPhone video).
+
+## Data tab (Florida dealerships)
+
+The Data tab reads `dealer_directory` in the Supabase "Auto Sync App" project: 4,101 Florida dealerships copied on
+2026-11-18 from the Genius Leads database (`prospects`, category `dealership`, state FL). It's a snapshot. New scrapes in
+Genius Leads don't show up until the copy is re-run (ask Claude to "refresh the Florida dealer data from Genius Leads";
+the copy matches on Google place id, so re-running updates existing rows instead of duplicating them).
