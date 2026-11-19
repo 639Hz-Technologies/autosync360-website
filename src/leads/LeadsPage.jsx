@@ -51,8 +51,8 @@ const css = `
 *{box-sizing:border-box;margin:0;padding:0}
 body{margin:0;background:${C.bg}}
 .ld{min-height:100vh;background:${C.bg};font:15px/1.5 Inter,system-ui,sans-serif;color:${C.text};padding-bottom:40px}
-.ld-wrap{max-width:1240px;margin:0 auto;padding:0 16px}
-.ld-wrap.wide{max-width:none}
+/* Full width on every tab, so the logo and tabs sit in the same place everywhere */
+.ld-wrap{max-width:none;margin:0 auto;padding:0 16px}
 .ld-top{position:sticky;top:0;z-index:5;background:#fff;border-bottom:1px solid ${C.line}}
 .ld-top-in{display:flex;align-items:center;justify-content:space-between;gap:12px;height:58px}
 .ld-top img{height:22px;width:auto;mix-blend-mode:multiply;display:block}
@@ -192,11 +192,11 @@ export default function LeadsPage() {
       <style>{css}</style>
       {!token ? <Login onLogin={login} /> : (
         <>
-          <header className="ld-top"><div className={`ld-wrap${tab === "pipe" ? " wide" : ""} ld-top-in`}>
+          <header className="ld-top"><div className="ld-wrap ld-top-in">
             <img src="/autosync360-wordmark.png" alt="AutoSync 360" />
             <button className="ld-btn sm g" onClick={logout}>Log out</button>
           </div></header>
-          <main className={`ld-wrap${tab === "pipe" ? " wide" : ""} ld-main`}>
+          <main className="ld-wrap ld-main">
             <div className="ld-head">
               <h1 className="ld-h">{TITLES[tab]}</h1>
               <nav className="ld-tabs">
