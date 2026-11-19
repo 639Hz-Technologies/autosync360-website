@@ -3,7 +3,7 @@
 // Moving a lead out of "New lead" stops its automatic emails (you're talking to them now).
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { C, AuthError, api } from "./shared.js";
-import { PROFILE_FIELDS, PROFILE_KEYS, fmtMoney } from "./profile.js";
+import { PROFILE_FIELDS, PROFILE_KEYS, fmtMoney, monthlyRevenue } from "./profile.js";
 
 export const STAGES = [
   { key: "new", label: "New lead", color: "#2563eb" },
@@ -66,6 +66,13 @@ const css = `
 .pp-vol .ld-input{padding:10px 12px;font-size:15px}
 .pp-vol .wide{grid-column:1 / -1}
 .pp-pair{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.pp-rev{margin-top:14px;border:1px solid rgba(5,150,105,.25);background:rgba(5,150,105,.06);border-radius:12px;padding:12px 14px}
+.pp-rev-line{display:flex;justify-content:space-between;gap:12px;font-size:13px;color:${C.mute};padding:2px 0}
+.pp-rev-line b{color:${C.text};font-weight:600;white-space:nowrap}
+.pp-rev-total{display:flex;justify-content:space-between;align-items:baseline;gap:12px;border-top:1px solid rgba(5,150,105,.25);margin-top:8px;padding-top:8px}
+.pp-rev-total span{font-size:13px;font-weight:700;color:#047857;text-transform:uppercase;letter-spacing:.06em}
+.pp-rev-total b{font:700 24px 'Space Grotesk',sans-serif;color:#047857}
+.pp-rev-total small{display:block;font-size:12px;color:${C.mute};font-weight:500;text-align:right}
 .pp-money{position:relative}.pp-money span{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:${C.mute};font-size:15px;pointer-events:none}
 .pp-money .ld-input{padding-left:24px;width:100%;box-sizing:border-box}
 .pp-arch{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:24px;padding-top:16px;border-top:1px solid ${C.line}}
@@ -253,6 +260,25 @@ function LeadDrawer({ lead, token, onClose, onMove, onSaved, onFail }) {
               </label>
             ))}
           </div>
+          {(() => {
+            const rev = monthlyRevenue(vol);
+            return (
+              <div className="pp-rev">
+                {rev.lines.map(l => (
+                  <div key={l.key} className="pp-rev-line">
+                    <span>{l.label}: {l.qty.toLocaleString()}{l.key === "cars_on_lot" ? " cars" : ""} × {fmtMoney(l.price)}{l.times !== 1 ? ` × ${l.times} washes` : ""}</span>
+                    <b>{fmtMoney(l.amount)}</b>
+                  </div>
+                ))}
+                {!rev.lines.length && <div className="pp-rev-line"><span>Add a volume and what they pay to see their monthly spend.</span></div>}
+                {rev.needsWashFrequency && <div className="pp-rev-line"><span>Pick how often they wash the lot to include the lot wash.</span></div>}
+                <div className="pp-rev-total">
+                  <span>Monthly revenue</span>
+                  <b>{fmtMoney(rev.total)}<small>{fmtMoney(Math.round(rev.total * 12 * 100) / 100)} / year</small></b>
+                </div>
+              </div>
+            );
+          })()}
           <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 10 }}>
             <button className="ld-btn sm" disabled={!volDirty || busy === "vol"} onClick={() => save("vol", "profile", { profile: vol })}>{busy === "vol" ? "Saving…" : volDirty ? "Save volume" : "Saved"}</button>
           </div>
