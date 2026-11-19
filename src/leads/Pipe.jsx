@@ -39,8 +39,11 @@ const css = `
 .pp-tag.demo{background:rgba(124,58,237,.1);color:#7c3aed}
 .pp-tag.test{background:rgba(217,119,6,.12);color:${C.warn}}
 .pp-empty{font-size:13px;color:#94a3b8;text-align:center;padding:16px 8px}
-.pp-drawer-bg{position:fixed;inset:0;background:rgba(11,18,32,.45);z-index:40;display:flex;justify-content:flex-end}
-.pp-drawer{background:#fff;width:100%;max-width:520px;height:100%;overflow-y:auto;padding:20px 20px 40px;box-shadow:-12px 0 40px rgba(15,23,42,.2)}
+.pp-drawer-bg{position:fixed;inset:0;z-index:40;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(11,18,32,.28);-webkit-backdrop-filter:blur(5px);backdrop-filter:blur(5px);animation:ppFade .15s ease-out}
+.pp-drawer{background:#fff;width:100%;max-width:640px;max-height:calc(100vh - 48px);overflow-y:auto;padding:24px 28px 28px;border-radius:18px;box-shadow:0 24px 70px rgba(15,23,42,.3);animation:ppPop .18s ease-out}
+@keyframes ppFade{from{opacity:0}to{opacity:1}}
+@keyframes ppPop{from{opacity:0;transform:translateY(8px) scale(.98)}to{opacity:1;transform:none}}
+@media(max-width:600px){.pp-drawer-bg{padding:12px}.pp-drawer{padding:18px 16px 22px;max-height:calc(100vh - 24px)}}
 .pp-drawer h2{font:700 24px/1.2 'Space Grotesk',sans-serif;color:${C.ink};letter-spacing:-.02em;margin-right:40px}
 .pp-x{position:sticky;top:0;float:right;width:36px;height:36px;border-radius:50%;border:1px solid ${C.line};background:#fff;font-size:20px;line-height:1;cursor:pointer;color:${C.text}}
 .pp-sec{margin-top:20px}
@@ -144,7 +147,9 @@ function LeadDrawer({ lead, token, onClose, onMove, onSaved, onFail }) {
   useEffect(() => {
     const onKey = e => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { window.removeEventListener("keydown", onKey); document.body.style.overflow = prev; };
   }, [onClose]);
 
   const save = async (what, path, body) => {
@@ -159,7 +164,7 @@ function LeadDrawer({ lead, token, onClose, onMove, onSaved, onFail }) {
 
   return (
     <div className="pp-drawer-bg" onClick={onClose}>
-      <aside className="pp-drawer" onClick={e => e.stopPropagation()}>
+      <aside className="pp-drawer" role="dialog" aria-modal="true" aria-label={lead.dealership} onClick={e => e.stopPropagation()}>
         <button className="pp-x" onClick={onClose} aria-label="Close">×</button>
         <h2>{lead.dealership}</h2>
         <div className="ld-hint">Added {fmtDate(lead.created_at)}{lead.test_mode ? " · test run" : ""}</div>
