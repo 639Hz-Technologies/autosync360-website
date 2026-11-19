@@ -82,7 +82,8 @@ body{margin:0;background:${C.bg}}
   .ld-card{padding:24px;border-radius:16px}
   .ld-form{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:stretch;margin-top:20px}
   .ld-col{display:flex;flex-direction:column;gap:20px}
-  .ld-a-notes{flex:1}
+  /* the last card in each column stretches, so both columns always end flush */
+  .ld-col > .ld-card:last-child{flex:1}
   .ld-send{flex-direction:row;justify-content:flex-end;align-items:center}
   .ld-send .ld-btn.big{width:auto;min-width:320px;padding:17px 28px;font-size:17px}
   .ld-thumbs{grid-template-columns:repeat(5,1fr)!important}
