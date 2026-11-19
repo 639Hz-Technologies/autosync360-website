@@ -6,6 +6,7 @@ export const config = { path: "/lot/:id" };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const PHONE = "866-AUTO-239", PHONE_HREF = "tel:8662886239";
+const DIRECT = "239-382-7039", DIRECT_HREF = "tel:+12393827039"; // owner's direct line
 
 const page = (title, body) => new Response(`<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -39,6 +40,8 @@ video{width:100%;border-radius:12px;background:#000;margin-bottom:12px;max-heigh
 .points span{font-size:14px;color:#64748b;line-height:1.5}
 .cta.end{margin:32px 0 56px;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px}
 .cta.end h3{font:700 20px 'Space Grotesk',sans-serif;color:#0b1220}
+.direct{margin:0 0 18px;color:#0b1220;font-weight:500}
+.direct a{color:#2563eb;font-weight:700;text-decoration:none;white-space:nowrap}
 .media-h{font:700 20px 'Space Grotesk',sans-serif;color:#0b1220;margin:0 0 12px}
 .btn{display:inline-flex;align-items:center;gap:8px;padding:13px 22px;border-radius:10px;font-weight:600;font-size:15px;text-decoration:none;background:#2563eb;color:#fff;margin:0 8px 8px 0}
 .btn.g{background:transparent;color:#1e293b;border:1px solid rgba(15,23,42,.15)}
@@ -145,13 +148,14 @@ export default async (req, context) => {
         <li><span class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 17h-2v-6l2-5h9l4 5h3v6h-2"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/></svg></span><div><b>Deliveries handled</b><span>We prep sold units for delivery so every customer drives off in a car that looks brand new.</span></div></li>
         <li><span class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span><div><b>Your pet peeves, done every time</b><span>Tell us once how you want it: tires, glass, jambs, decals, whatever bugs you. It's done that way on every car, and you never have to repeat yourself.</span></div></li>
       </ul>
+      <p class="direct">You can also call me directly at <a href="${DIRECT_HREF}">${DIRECT}</a>, and I'll get something on the calendar so we can swing by.</p>
       <a class="btn" href="${PHONE_HREF}">Call ${PHONE}</a><a class="btn g" href="/#demo">Learn about AutoSync 360</a>
     </section>
     <h2 class="media-h">Photos from your lot</h2>
     ${videos.map(v => `<video controls playsinline preload="metadata" src="${esc(mediaUrl(v.path))}"></video>`).join("")}
     <div class="grid">${photos.map(p => `<a href="${esc(mediaUrl(p.path))}" target="_blank" rel="noopener"><img loading="lazy" src="${esc(mediaUrl(p.path))}" alt="Vehicle on the ${esc(lead.dealership)} lot"></a>`).join("")}</div>
     <section class="cta end">
-      <h3>Ready for your $1 demo? Reply to our email or call to pick a day.</h3>
-      <a class="btn" style="margin:0" href="${PHONE_HREF}">Call ${PHONE}</a>
+      <h3>Ready for your $1 demo? Call me directly and I'll get something on the calendar so we can swing by.</h3>
+      <a class="btn" style="margin:0" href="${DIRECT_HREF}">Call ${DIRECT}</a>
     </section>`);
 };

@@ -17,6 +17,9 @@ const OPENER = "I'll be straight with you: your lot looks like shit.";
 // The offer, used in email 1 and repeated in the follow-ups.
 const OFFER = "Here's my offer: give us your dirtiest vehicle and we'll detail it for $1. That $1 gets us set up in your system as a paid vendor, so when you're ready to make the switch, we're already one step closer.";
 
+// A personal line with the owner's direct number, in every email (and on the lot page).
+const DIRECT = "You can also call me directly at 239-382-7039, and I'll get something on the calendar so we can swing by.";
+
 // v = { first, dealership, street, issues, issuesOther, hasVideo, photoCount, reportUrl }
 const EMAILS = [
   v => ({
@@ -31,6 +34,7 @@ const EMAILS = [
       OFFER,
       "We're also a tech startup that does inventory management for dealerships, and we'd love to help you out there too.",
       "Can we come in next week and do a demo?",
+      DIRECT,
     ],
     cta: v.hasVideo ? "See the photos and video" : `See all ${v.photoCount} photos`,
   }),
@@ -40,6 +44,7 @@ const EMAILS = [
       `Following up on the photos from ${v.dealership}. Your front line is what customers see first, in person and online.`,
       { media: 1 },
       "The offer stands: your dirtiest vehicle, detailed for $1. It gets AutoSync 360 set up as a paid vendor in your system, so switching later is easy. Can we come in next week and do a demo?",
+      DIRECT,
     ],
     cta: "View your lot photos",
   }),
@@ -49,6 +54,7 @@ const EMAILS = [
       "Most stores don't have a detailing problem, they have a consistency problem. Cars get cleaned for the photo shoot, then sit on the line for weeks collecting dust, and CSI pays for it when a customer takes delivery of a car that isn't right.",
       `We've spent over a decade making dealership and recon center inventory front-line ready, on a schedule, without your team having to chase us. Happy to put together a quote for ${v.dealership} based on your lot size, or start with the $1 demo.`,
       "And since we're also a tech company building inventory management for dealerships, we can show you that side while we're there. Would next week work?",
+      DIRECT,
     ],
     cta: "Your lot photos",
   }),
@@ -57,6 +63,7 @@ const EMAILS = [
       `Hi ${v.first},`,
       "I haven't heard back, so I'll assume the timing isn't right and stop reaching out.",
       `If getting ${v.dealership}'s front line ready moves up the list, just reply here. The $1 demo is still on the table, and the photos will still be here.`,
+      DIRECT,
     ],
     cta: "Your lot photos",
   }),
