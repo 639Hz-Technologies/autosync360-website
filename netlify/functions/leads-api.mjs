@@ -1,7 +1,7 @@
 // API behind autosync360.com/leads (password protected field tool).
 //   POST /api/leads/login   {password}                 → {token}
 //   POST /api/leads/upload  {type}                     → {path, uploadUrl, url}   (phone PUTs the file to uploadUrl)
-//   POST /api/leads/send    {dealership, address, contactName, contactTitle, email, issues[], notes, media[], force}
+//   POST /api/leads/send    {dealership, address, contactName, contactTitle, email, issues[], notes, media[]}
 //                                                      → saves the lead and sends email 1 via Postmark (follow-ups: leads-followups)
 //   POST /api/leads/preview {same as send}             → {subject, html} of email 1, nothing sent
 //   GET  /api/leads/list                               → recent leads for the Campaign tab
@@ -250,11 +250,10 @@ async function send(body) {
   }
   if (!lead.media.length) return json({ error: "Add at least one photo or video." }, 400);
 
-  // Never email someone who unsubscribed; don't put the same person in twice (unless you confirm).
-  const prior = await db.select(`select=id,dealership,status&contact_email=eq.${encodeURIComponent(lead.contact_email)}&status=in.(active,unsubscribed)&limit=5`);
-  if (prior.some(p => p.status === "unsubscribed")) return json({ error: `${lead.contact_email} unsubscribed earlier, so we can't email them again.` }, 409);
-  const dup = prior.find(p => p.status === "active");
-  if (dup && !body.force && !lead.test_mode) return json({ duplicate: dup, error: `${lead.contact_email} is already in the campaign (${dup.dealership}).` }, 409);
+  // Never email someone who unsubscribed. The same email already being in a campaign is fine:
+  // one GM or owner can run many dealerships, and each dealership gets its own campaign.
+  const prior = await db.select(`select=id&contact_email=eq.${encodeURIComponent(lead.contact_email)}&status=eq.unsubscribed&limit=1`);
+  if (prior.length) return json({ error: `${lead.contact_email} unsubscribed earlier, so we can't email them again.` }, 409);
 
   const row = await db.insert({ ...lead, status: "active", step: 0 });
   let sent;

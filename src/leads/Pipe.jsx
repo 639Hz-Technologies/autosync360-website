@@ -3,7 +3,7 @@
 // Moving a lead out of "New lead" stops its automatic emails (you're talking to them now).
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { C, AuthError, api } from "./shared.js";
-import { PROFILE_FIELDS } from "./profile.js";
+import { PROFILE_FIELDS, PROFILE_KEYS, fmtMoney } from "./profile.js";
 
 export const STAGES = [
   { key: "new", label: "New lead", color: "#2563eb" },
@@ -65,6 +65,9 @@ const css = `
 .pp-vol label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:${C.mute};font-weight:500}
 .pp-vol .ld-input{padding:10px 12px;font-size:15px}
 .pp-vol .wide{grid-column:1 / -1}
+.pp-pair{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.pp-money{position:relative}.pp-money span{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:${C.mute};font-size:15px;pointer-events:none}
+.pp-money .ld-input{padding-left:24px;width:100%;box-sizing:border-box}
 .pp-arch{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:24px;padding-top:16px;border-top:1px solid ${C.line}}
 .pp-arch-banner{background:#f1f5f9;border:1px solid #e2e8f0;border-radius:10px;padding:10px 12px;margin-top:12px;font-size:14px;color:#475569}
 .ld-btn.danger{background:#fff;color:${C.bad};border:1px solid rgba(220,38,38,.35);box-shadow:none}
@@ -73,7 +76,10 @@ const css = `
 `;
 
 // Short summary on the card, e.g. "120 on lot · 80 used/mo"
-const volumeTag = p => [p?.cars_on_lot != null && `${p.cars_on_lot} on lot`, p?.used_per_month != null && `${p.used_per_month} used/mo`].filter(Boolean).join(" · ");
+const volumeTag = p => [
+  p?.cars_on_lot != null && `${p.cars_on_lot} on lot`,
+  p?.used_per_month != null && `${p.used_per_month} used/mo${p.used_price != null ? ` @ ${fmtMoney(p.used_price)}` : ""}`,
+].filter(Boolean).join(" · ");
 
 const fmtDate = d => new Date(d).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 const toLocalInput = d => { if (!d) return ""; const x = new Date(d); x.setMinutes(x.getMinutes() - x.getTimezoneOffset()); return x.toISOString().slice(0, 16); };
@@ -165,8 +171,8 @@ function LeadDrawer({ lead, token, onClose, onMove, onSaved, onFail }) {
   const [note, setNote] = useState("");
   const [demo, setDemo] = useState(toLocalInput(lead.demo_at));
   const [busy, setBusy] = useState("");
-  const [vol, setVol] = useState(() => Object.fromEntries(PROFILE_FIELDS.map(f => [f.key, lead.profile?.[f.key] ?? ""])));
-  const volDirty = PROFILE_FIELDS.some(f => String(vol[f.key] ?? "") !== String(lead.profile?.[f.key] ?? ""));
+  const [vol, setVol] = useState(() => Object.fromEntries(PROFILE_KEYS.map(k => [k, lead.profile?.[k] ?? ""])));
+  const volDirty = PROFILE_KEYS.some(k => String(vol[k] ?? "") !== String(lead.profile?.[k] ?? ""));
 
   useEffect(() => {
     const onKey = e => e.key === "Escape" && onClose();
@@ -215,8 +221,24 @@ function LeadDrawer({ lead, token, onClose, onMove, onSaved, onFail }) {
         <div className="pp-sec">
           <h3>Volume</h3>
           <div className="pp-vol">
-            {PROFILE_FIELDS.map(f => (
-              <label key={f.key} className={f.type === "select" ? "wide" : ""}>
+            {PROFILE_FIELDS.map(f => f.price ? (
+              // Volume on the left, what they pay per unit on the right.
+              <div key={f.key} className="pp-pair wide">
+                <label>
+                  {f.label}
+                  <input className="ld-input" inputMode="numeric" value={vol[f.key]} placeholder="0"
+                    onChange={e => setVol(v => ({ ...v, [f.key]: e.target.value.replace(/[^\d]/g, "") }))} />
+                </label>
+                <label>
+                  {f.price.label}
+                  <div className="pp-money"><span>$</span>
+                    <input className="ld-input" inputMode="decimal" value={vol[f.price.key]} placeholder="0"
+                      onChange={e => setVol(v => ({ ...v, [f.price.key]: e.target.value.replace(/[^\d.]/g, "") }))} />
+                  </div>
+                </label>
+              </div>
+            ) : (
+              <label key={f.key} className={f.type === "select" || f.key === "price_per_detail" ? "wide" : ""}>
                 {f.label}
                 {f.type === "select" ? (
                   <select className="ld-input" value={vol[f.key]} onChange={e => setVol(v => ({ ...v, [f.key]: e.target.value }))}>
@@ -225,7 +247,7 @@ function LeadDrawer({ lead, token, onClose, onMove, onSaved, onFail }) {
                   </select>
                 ) : (
                   <input className="ld-input" inputMode={f.type === "number" ? "numeric" : undefined} value={vol[f.key]}
-                    placeholder={f.type === "number" ? "0" : f.key === "price_per_detail" ? "$85 full, $25 wash" : ""}
+                    placeholder={f.type === "number" ? "0" : f.key === "price_per_detail" ? "e.g. $25 quick wash, $150 heavy recon" : ""}
                     onChange={e => setVol(v => ({ ...v, [f.key]: f.type === "number" ? e.target.value.replace(/[^\d]/g, "") : e.target.value }))} />
                 )}
               </label>

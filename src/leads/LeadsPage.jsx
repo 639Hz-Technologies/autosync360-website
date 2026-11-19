@@ -320,7 +320,6 @@ function NewLead({ token, onAuthFail }) {
   const [preview, setPreview] = useState(null); // {subject, html, from} | "loading"
   const [sending, setSending] = useState(false);
   const [err, setErr] = useState("");
-  const [dup, setDup] = useState(null);
   const [sent, setSent] = useState(null);
 
   // Keep a draft so a reload or a dropped signal on the lot doesn't lose the work.
@@ -361,21 +360,21 @@ function NewLead({ token, onAuthFail }) {
   const ccOk = ccFilled.every(c => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(c.email.trim()));
   const canSend = f.dealership.trim() && emailOk && ccOk && ready.length && !uploading;
 
-  const send = async force => {
-    setSending(true); setErr(""); setDup(null);
+  const send = async () => {
+    setSending(true); setErr("");
     try {
-      const r = await api("send", { token, body: { ...f, cc: ccFilled, media: ready.map(m => ({ path: m.path, type: m.kind })), force } });
+      const r = await api("send", { token, body: { ...f, cc: ccFilled, media: ready.map(m => ({ path: m.path, type: m.kind })) } });
       setSent({ ...r, email: f.email, dealership: f.dealership, test: !!f.testMode });
       store.set(DRAFT_KEY, null);
     } catch (x) {
       if (x instanceof AuthError) return onAuthFail();
-      if (x.status === 409) setDup(x.message); else setErr(x.message);
+      setErr(x.message);
     } finally {
       setSending(false); setConfirming(false);
     }
   };
 
-  const reset = () => { setOtherOpen(false); setF(emptyForm); setMedia([]); setSent(null); setErr(""); setDup(null); window.scrollTo(0, 0); };
+  const reset = () => { setOtherOpen(false); setF(emptyForm); setMedia([]); setSent(null); setErr(""); window.scrollTo(0, 0); };
 
   if (sent) return (
     <div className="ld-card ld-ok">
@@ -506,12 +505,6 @@ function NewLead({ token, onAuthFail }) {
       </div>
 
       {err && <div className="ld-err">{err}</div>}
-      {dup && (
-        <div className="ld-err">
-          {dup}
-          <div style={{ marginTop: 10 }}><button className="ld-btn sm" onClick={() => send(true)} disabled={sending}>Send anyway</button></div>
-        </div>
-      )}
 
       <div className="ld-send">
         {!canSend && !uploading && <span className="ld-hint" style={{ margin: 0 }}>{!f.dealership.trim() ? "Add the dealership" : !ready.length ? "Add at least one photo or video" : !emailOk ? "Add the GM's email" : "Fix the CC email"} to send.</span>}
@@ -536,7 +529,7 @@ function NewLead({ token, onAuthFail }) {
               try { setPreview(await api("preview", { token, body: { ...f, media: ready.map(m => ({ path: m.path, type: m.kind })) } })); }
               catch (x) { if (x instanceof AuthError) return onAuthFail(); setErr(x.message); setPreview(null); }
             }}>{preview === "loading" ? "Loading…" : "Preview email"}</button>
-            <button className="ld-btn" onClick={() => send(false)} disabled={sending}>{sending ? "Sending…" : "Send"}</button>
+            <button className="ld-btn" onClick={() => send()} disabled={sending}>{sending ? "Sending…" : "Send"}</button>
             <button className="ld-btn g" style={{ marginTop: 10 }} onClick={() => setConfirming(false)}>Back</button>
           </div>
         </div>
