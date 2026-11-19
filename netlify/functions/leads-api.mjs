@@ -11,12 +11,15 @@
 //   POST /api/leads/demo    {id, demoAt}               → set/clear the demo date (moves New/Replied → Demo scheduled)
 //   POST /api/leads/profile {id, profile}              → save the Volume section (used/mo, deliveries, PDIs, lot wash…)
 //   POST /api/leads/archive {id, archived}             → archive (hide + stop emails) or unarchive
+//   GET  /api/leads/data?q=&city=&sort=&lat=&lng=&offset=  → Florida dealerships from Genius Leads ("Data" tab)
+//   GET  /api/leads/data-cities                        → Florida cities with dealer counts
 //   POST /api/leads/places  {input, sessionToken, lat, lng} → Google car-dealer suggestions
 //   POST /api/leads/place   {placeId, sessionToken}    → name, address, website, phone for the picked dealer
 import crypto from "node:crypto";
 import dns from "node:dns/promises";
 import { ISSUES } from "../../src/leads/issues.js";
 import { cleanProfile } from "../../src/leads/profile.js";
+import { directoryEnabled, searchDealers, dealerCities } from "../lib/directory.mjs";
 import { mailMissing, senderInfo, sendLeadEmail, afterSend } from "../lib/lead-mail.mjs";
 import { renderEmail } from "../lib/lead-emails.mjs";
 import {
@@ -149,6 +152,18 @@ export default async (req) => {
       const row = await getLead(id);
       if (!row) return json({ error: "Lead not found" }, 404);
       return json({ lead: await db.update(id, { notes_log: [...(row.notes_log || []), { at: now(), text: t }] }) });
+    }
+
+    if (route === "data" && req.method === "GET") {
+      if (!directoryEnabled()) return json({ disabled: true, total: 0, dealers: [] });
+      const u = new URL(req.url).searchParams;
+      const num = k => (u.get(k) === null || u.get(k) === "" ? NaN : Number(u.get(k)));
+      return json(await searchDealers({ q: u.get("q"), city: u.get("city"), sort: u.get("sort") || "reviews", lat: num("lat"), lng: num("lng"), offset: num("offset") || 0 }));
+    }
+
+    if (route === "data-cities" && req.method === "GET") {
+      if (!directoryEnabled()) return json({ disabled: true, cities: [] });
+      return json({ cities: await dealerCities() });
     }
 
     if (route === "profile" && req.method === "POST") {

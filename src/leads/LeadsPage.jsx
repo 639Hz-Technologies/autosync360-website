@@ -5,6 +5,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ISSUES } from "./issues.js";
 import Pipe from "./Pipe.jsx";
+import Data from "./Data.jsx";
 import { C, store, AuthError, api } from "./shared.js";
 
 const TOKEN_KEY = "as360_leads_token";
@@ -60,7 +61,7 @@ body{margin:0;background:${C.bg}}
 .ld-tabs{margin-left:auto;display:flex;background:#fff;border:1px solid ${C.line};border-radius:12px;padding:4px}
 .ld-tabs button{border:0;background:transparent;font:600 14px Inter,sans-serif;color:${C.mute};padding:8px 14px;border-radius:9px;cursor:pointer;white-space:nowrap}
 .ld-tabs button.on{background:${C.ink};color:#fff}
-@media(max-width:420px){.ld-top img{height:18px}.ld-tabs{margin-left:0;width:100%}.ld-tabs button{flex:1;padding:8px 6px}}
+@media(max-width:520px){.ld-top img{height:18px}.ld-tabs{margin-left:0;width:100%}.ld-tabs button{flex:1;padding:8px 4px;font-size:13px}}
 .ld-h{font:700 24px/1.2 'Space Grotesk',sans-serif;color:${C.ink};letter-spacing:-.02em}
 .ld-card{background:#fff;border:1px solid ${C.line};border-radius:14px;padding:16px;margin-top:14px}
 .ld-toolbar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:14px;color:${C.mute};font-size:14px}
@@ -87,8 +88,8 @@ body{margin:0;background:${C.bg}}
   .ld-send{flex-direction:row;justify-content:flex-end;align-items:center}
   .ld-send .ld-btn.big{width:auto;min-width:320px;padding:17px 28px;font-size:17px}
   .ld-thumbs{grid-template-columns:repeat(5,1fr)!important}
-  .ld-chip{font-size:15px!important;padding:10px 15px!important}
-  .ld-capture label{padding:28px 8px!important}
+  .ld-chip{font-size:14px!important;padding:7px 12px!important}
+  .ld-chips{gap:7px!important}
 }
 .ld-step{font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#0891b2;margin-bottom:10px}
 .ld-label{display:block;font-size:13px;font-weight:600;color:${C.ink};margin:12px 0 6px}
@@ -97,7 +98,7 @@ body{margin:0;background:${C.bg}}
 .ld-input:focus{border-color:${C.accent};background:#fff}
 .ld-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .ld-capture{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.ld-capture label{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:18px 8px;border-radius:12px;border:1.5px dashed rgba(37,99,235,.45);background:rgba(37,99,235,.05);color:${C.accent};font-weight:600;cursor:pointer;text-align:center}
+.ld-capture label{display:flex;flex-direction:row;align-items:center;justify-content:center;gap:8px;padding:12px 8px;border-radius:12px;border:1.5px dashed rgba(37,99,235,.45);background:rgba(37,99,235,.05);color:${C.accent};font-weight:600;cursor:pointer;text-align:center}
 .ld-capture input{display:none}
 .ld-thumbs{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:12px}
 .ld-thumb{position:relative;aspect-ratio:1;border-radius:10px;overflow:hidden;background:#e2e8f0}
@@ -114,11 +115,6 @@ body{margin:0;background:${C.bg}}
 .ld-cc .full{grid-column:1 / -1}
 .ld-cc .x{position:absolute;top:-10px;right:-10px;width:26px;height:26px;border-radius:50%;border:1px solid ${C.line};background:#fff;color:${C.mute};font-size:16px;line-height:1;cursor:pointer}
 .ld-addcc{margin-top:10px;border:1.5px dashed rgba(37,99,235,.45);background:rgba(37,99,235,.05);color:${C.accent};border-radius:10px;padding:10px 14px;font:600 14px Inter,sans-serif;cursor:pointer;width:100%}
-.ld-test{display:flex;gap:12px;align-items:flex-start;margin-top:14px;padding:12px;border-radius:10px;border:1px dashed ${C.line};background:${C.bg};cursor:pointer}
-.ld-test.on{border:1.5px solid ${C.warn};background:rgba(217,119,6,.07)}
-.ld-test input{width:20px;height:20px;margin-top:2px;accent-color:${C.warn};flex:none}
-.ld-test b{display:block;color:${C.ink};font-size:14px}
-.ld-test span{font-size:13px;color:${C.mute}}
 .ld-btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:15px 18px;border-radius:12px;border:0;font:700 16px Inter,sans-serif;cursor:pointer;background:${C.accent};color:#fff;box-shadow:0 8px 24px rgba(37,99,235,.3)}
 .ld-btn:disabled{opacity:.5;cursor:default;box-shadow:none}
 .ld-btn.g{background:#fff;color:${C.text};border:1px solid ${C.line};box-shadow:none}
@@ -177,7 +173,18 @@ export default function LeadsPage() {
   const logout = () => { store.set(TOKEN_KEY, null); setToken(null); };
   const login = t => { store.set(TOKEN_KEY, t); setToken(t); };
 
-  const TITLES = { new: "New lot visit", list: "Campaign", pipe: "Pipeline" };
+  const TITLES = { data: "Florida dealerships", new: "New lot visit", list: "Campaign", pipe: "Pipeline" };
+
+  // "Start lead" on the Data tab: open New lead with the dealer filled in (keeps any photos already in the draft).
+  const startLead = d => {
+    let draft = null;
+    try { draft = JSON.parse(store.get(DRAFT_KEY)) || null; } catch { /* no draft */ }
+    const form = { ...emptyForm, ...(draft?.form || {}),
+      dealership: d.name || "", address: [d.address, d.city, ["FL", d.zip].filter(Boolean).join(" ")].filter(Boolean).join(", "),
+      placeId: d.place_id || "", website: d.website || "", phone: d.phone || "" };
+    store.set(DRAFT_KEY, JSON.stringify({ form, media: draft?.media || [] }));
+    pick("new");
+  };
   const pick = t => { setTab(t); window.scrollTo(0, 0); };
 
   return (
@@ -193,11 +200,13 @@ export default function LeadsPage() {
             <div className="ld-head">
               <h1 className="ld-h">{TITLES[tab]}</h1>
               <nav className="ld-tabs">
+                <button className={tab === "data" ? "on" : ""} onClick={() => pick("data")}>Data</button>
                 <button className={tab === "new" ? "on" : ""} onClick={() => pick("new")}>New lead</button>
                 <button className={tab === "list" ? "on" : ""} onClick={() => pick("list")}>Campaign</button>
                 <button className={tab === "pipe" ? "on" : ""} onClick={() => pick("pipe")}>Pipe</button>
               </nav>
             </div>
+            {tab === "data" && <Data token={token} onAuthFail={logout} onStartLead={startLead} />}
             {tab === "new" && <NewLead token={token} onAuthFail={logout} />}
             {tab === "list" && <Campaign token={token} onAuthFail={logout} />}
             {tab === "pipe" && <Pipe token={token} onAuthFail={logout} />}
@@ -304,7 +313,7 @@ function DealerSearch({ token, onAuthFail, value, onType, onPick }) {
 
 function NewLead({ token, onAuthFail }) {
   const draft = useRef(loadDraft()).current;
-  const [f, setF] = useState(draft?.form || emptyForm);
+  const [f, setF] = useState({ ...emptyForm, ...(draft?.form || {}), testMode: false });
   // media item: { key, kind: "image"|"video", preview, status: "uploading"|"done"|"error", progress, path, error }
   const [media, setMedia] = useState(draft?.media || []);
   const [confirming, setConfirming] = useState(false);
@@ -439,10 +448,6 @@ function NewLead({ token, onAuthFail }) {
         {(f.cc || []).length < 5 && (
           <button type="button" className="ld-addcc" onClick={() => setF(p => ({ ...p, cc: [...(p.cc || []), { name: "", title: (p.cc || []).length ? "" : "Used Car Manager", email: "" }] }))}>+ Add CC</button>
         )}
-        <label className={`ld-test${f.testMode ? " on" : ""}`}>
-          <input type="checkbox" checked={!!f.testMode} onChange={e => setF(p => ({ ...p, testMode: e.target.checked }))} />
-          <div><b>Test run</b><span>Sends all 4 emails 1 minute apart so you can see the whole sequence. Use your own email.</span></div>
-        </label>
       </div>
       </div>
       <div className="ld-col">
@@ -450,12 +455,12 @@ function NewLead({ token, onAuthFail }) {
         <div className="ld-step">2 · Photos & video</div>
         <div className="ld-capture">
           <label>
-            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" /><circle cx="12" cy="13" r="4" /></svg>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" /><circle cx="12" cy="13" r="4" /></svg>
             Add photos
             <input type="file" accept="image/*" multiple onChange={e => { addFiles(e.target.files, "image"); e.target.value = ""; }} />
           </label>
           <label>
-            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="23 7 16 12 23 17 23 7" /><rect x="1" y="5" width="15" height="14" rx="2" /></svg>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="23 7 16 12 23 17 23 7" /><rect x="1" y="5" width="15" height="14" rx="2" /></svg>
             Add video
             <input type="file" accept="video/*" onChange={e => { addFiles(e.target.files, "video"); e.target.value = ""; }} />
           </label>
