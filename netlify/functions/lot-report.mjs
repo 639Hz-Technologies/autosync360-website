@@ -31,6 +31,8 @@ video{width:100%;border-radius:12px;background:#000;margin-bottom:12px;max-heigh
 .cta .lead{color:#475569;margin:10px 0 20px;max-width:760px}
 .points{list-style:none;display:grid;grid-template-columns:1fr;gap:12px;margin:0 0 24px}
 @media(min-width:700px){.points{grid-template-columns:1fr 1fr;gap:14px}}
+@media(min-width:900px){.points{grid-template-columns:repeat(4,1fr);gap:12px}.points li{flex-direction:column;gap:10px}}
+@media(min-width:1200px){.wrap{max-width:1180px}}
 .points li{display:flex;gap:12px;align-items:flex-start;background:#f6f8fc;border-radius:12px;padding:14px}
 .points .ic{flex:none;width:34px;height:34px;border-radius:10px;background:rgba(37,99,235,.1);color:#2563eb;display:flex;align-items:center;justify-content:center}
 .points b{display:block;color:#0b1220;font-size:15px}
