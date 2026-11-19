@@ -196,6 +196,14 @@ function LeadDrawer({ lead, token, onClose, onMove, onSaved, onFail }) {
     finally { setBusy(""); }
   };
 
+  // One Save button (under Volume) saves the demo date and the volume together.
+  const demoDirty = demo !== toLocalInput(lead.demo_at);
+  const dirty = demoDirty || volDirty;
+  const saveAll = async () => {
+    if (demoDirty && !(await save("all", "demo", { demoAt: demo ? new Date(demo).toISOString() : null }))) return;
+    if (volDirty) await save("all", "profile", { profile: vol });
+  };
+
   const notes = [...(lead.notes_log || [])].reverse();
   const stopsEmails = lead.pipeline_stage === "new" && lead.status === "active";
 
@@ -219,7 +227,6 @@ function LeadDrawer({ lead, token, onClose, onMove, onSaved, onFail }) {
           <h3>Demo</h3>
           <div className="pp-row">
             <input className="ld-input" type="datetime-local" value={demo} onChange={e => setDemo(e.target.value)} />
-            <button className="ld-btn sm" disabled={!demo || busy === "demo"} onClick={() => save("demo", "demo", { demoAt: new Date(demo).toISOString() })}>{busy === "demo" ? "Saving…" : "Save"}</button>
             {lead.demo_at && <button className="ld-btn sm g" disabled={busy === "demo"} onClick={async () => { if (await save("demo", "demo", { demoAt: null })) setDemo(""); }}>Clear</button>}
           </div>
           {lead.demo_at && <p className="ld-hint">Scheduled for {fmtDate(lead.demo_at)}</p>}
@@ -280,7 +287,7 @@ function LeadDrawer({ lead, token, onClose, onMove, onSaved, onFail }) {
             );
           })()}
           <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 10 }}>
-            <button className="ld-btn sm" disabled={!volDirty || busy === "vol"} onClick={() => save("vol", "profile", { profile: vol })}>{busy === "vol" ? "Saving…" : volDirty ? "Save volume" : "Saved"}</button>
+            <button className="ld-btn sm" disabled={!dirty || busy === "all"} onClick={saveAll}>{busy === "all" ? "Saving…" : dirty ? "Save" : "Saved"}</button>
           </div>
         </div>
 
