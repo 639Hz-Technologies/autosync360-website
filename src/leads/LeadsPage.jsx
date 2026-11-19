@@ -27,6 +27,29 @@ async function compressImage(file, maxEdge = 1600) {
   }
 }
 
+// Videos must be 15 seconds or less. They upload as-is (not shrunk), so there's also a file-size cap:
+// Supabase Storage's global per-file limit (Storage → Settings), which stays at 50 MB while the
+// project's spend cap is on. Keep MAX_UPLOAD_MB in step with that setting.
+const MAX_VIDEO_SECONDS = 15;
+const MAX_UPLOAD_MB = 50;
+const tooLongMessage = s => `That video is ${Math.round(s)} seconds. Videos need to be ${MAX_VIDEO_SECONDS} seconds or less. Trim it in Photos (tap Edit and drag the ends) or record a shorter clip.`;
+const tooBigMessage = mb => `That video is ${mb ? `${Math.round(mb)} MB` : "too big"}, over the ${MAX_UPLOAD_MB} MB limit. It was probably recorded in 4K. Switch the camera to 1080p (iPhone: Settings → Camera → Record Video → 1080p HD at 30 fps) and record it again.`;
+
+// Length of a video file in seconds, read from its metadata. null if the browser can't tell (then we let it through).
+function videoSeconds(file) {
+  return new Promise(resolve => {
+    const v = document.createElement("video");
+    const url = URL.createObjectURL(file);
+    const done = s => { clearTimeout(timer); URL.revokeObjectURL(url); v.removeAttribute("src"); resolve(s); };
+    const timer = setTimeout(() => done(null), 8000);
+    v.preload = "metadata";
+    v.muted = true;
+    v.onloadedmetadata = () => done(Number.isFinite(v.duration) ? v.duration : null);
+    v.onerror = () => done(null);
+    v.src = url;
+  });
+}
+
 function guessType(file) {
   if (file.type) return file.type;
   const ext = (file.name.split(".").pop() || "").toLowerCase();
@@ -40,7 +63,11 @@ function putWithProgress(url, blob, type, onProgress) {
     xhr.setRequestHeader("content-type", type);
     xhr.setRequestHeader("x-upsert", "false");
     xhr.upload.onprogress = e => e.lengthComputable && onProgress(e.loaded / e.total);
-    xhr.onload = () => (xhr.status < 300 ? resolve() : reject(new Error(`Upload failed (${xhr.status}) ${xhr.responseText.slice(0, 120)}`)));
+    xhr.onload = () => {
+      if (xhr.status < 300) return resolve();
+      if (xhr.status === 413 || /maximum allowed size|too large/i.test(xhr.responseText)) return reject(new Error(tooBigMessage(blob.size / 1048576)));
+      reject(new Error(`Upload failed (${xhr.status}) ${xhr.responseText.slice(0, 120)}`));
+    };
     xhr.onerror = () => reject(new Error("Upload failed: check your connection"));
     xhr.send(blob);
   });
@@ -334,7 +361,20 @@ function NewLead({ token, onAuthFail }) {
   const patch = (key, p) => setMedia(list => list.map(m => (m.key === key ? { ...m, ...p } : m)));
 
   const addFiles = async (fileList, kind) => {
-    const files = [...fileList];
+    let files = [...fileList];
+    // Videos: 15 seconds max, and under the storage size cap (they aren't shrunk before upload).
+    if (kind === "video") {
+      setErr("");
+      const ok = [];
+      for (const file of files) {
+        const s = await videoSeconds(file);
+        if (s !== null && s > MAX_VIDEO_SECONDS + 0.5) setErr(tooLongMessage(s));
+        else if (file.size > MAX_UPLOAD_MB * 1048576) setErr(tooBigMessage(file.size / 1048576));
+        else ok.push(file);
+      }
+      files = ok;
+      if (!files.length) return;
+    }
     const items = files.map(file => ({ key: crypto.randomUUID(), kind, file, preview: URL.createObjectURL(file), status: "uploading", progress: 0 }));
     setMedia(list => [...list, ...items]);
     for (const it of items) {
@@ -464,6 +504,7 @@ function NewLead({ token, onAuthFail }) {
             <input type="file" accept="video/*" onChange={e => { addFiles(e.target.files, "video"); e.target.value = ""; }} />
           </label>
         </div>
+        <p className="ld-hint">Videos: {MAX_VIDEO_SECONDS} seconds or less.</p>
         {media.length > 0 && (
           <div className="ld-thumbs">
             {media.map(m => (
